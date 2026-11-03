@@ -2,6 +2,8 @@
 
 An independent, open portfolio project. It is not affiliated with, endorsed by or built from any company's data or code.
 
+See `docs/HARNESS.md` for the runtime (the harness) that this product runs on.
+
 ## One-line pitch
 
 An evaluated payment-scam defence system: it intercepts risky payments with explainable questions, hands uncertain cases to an analyst with evidence-cited LLM summaries, and measures, with estimators checked against a simulator, whether each intervention actually reduces loss.
