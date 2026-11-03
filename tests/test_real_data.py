@@ -1,8 +1,8 @@
-"""Integration tests: they read the REAL processed data and its generated manifests. Run `python -m spellbreaker_data all` first."""
+"""Integration tests: they read the REAL processed data and its generated manifests. Run `python -m safepay_data all` first."""
 import json
 import pandas as pd
 import pytest
-from spellbreaker_data.registry import PROCESSED, load_registry
+from safepay_data.registry import PROCESSED, load_registry
 
 pytestmark = pytest.mark.integration
 REG = load_registry()
@@ -11,7 +11,7 @@ REG = load_registry()
 def manifest(name):
     p = PROCESSED / f"{name}.manifest.json"
     if not p.exists():
-        pytest.skip(f"{name} not built; run python -m spellbreaker_data {name}")
+        pytest.skip(f"{name} not built; run python -m safepay_data {name}")
     return json.loads(p.read_text())
 
 

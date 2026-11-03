@@ -1,8 +1,8 @@
-# The Harness: a runtime for AI decisions in regulated money flows (draft v0.1)
+# SafePay Harness: a runtime for AI decisions in regulated money flows (draft v0.1)
 
 Working idea: an operating system for financial-crime and payment-risk decisions. The "OS" is an architecture, not a market claim. Applications ("workloads") run on a small trusted kernel that makes every AI-assisted decision policy-gated, auditable, replayable and measurable.
 
-Spellbreaker (scam interception) is the first workload. A harness with one workload is not an abstraction, so v1 also ships a second workload (payee and name screening on the OFAC list that the data pipeline already downloads).
+Interception (codename Spellbreaker, scam interception) is the first workload. A harness with one workload is not an abstraction, so v1 also ships a second workload (payee and name screening on the OFAC list that the data pipeline already downloads).
 
 ## Why a harness and not another app
 
@@ -31,7 +31,7 @@ Fintechs rarely lack models. They lack a safe way to let AI take part in decisio
 - **L4 Agent runtime.** Workflows as explicit state machines with LLM steps inside them. Tool Gateway, idempotent actions, approval interrupts, resumable runs, sandboxed execution.
 - **L5 Assurance.** Offline evals, replay, shadow mode, counterfactual estimators (the Decision Lab), faithfulness checker, red-team suites, drift monitoring, auto-generated model cards.
 - **L6 Control plane.** HTTP APIs, SSE events, and a console for analysts, owners and admins.
-- **L7 Workloads.** Spellbreaker, screening, and later others, packaged as plugins that declare their tools, policies, evals and UI panels.
+- **L7 Workloads.** Interception, screening, case review, and later others, packaged as plugins that declare their tools, policies, evals and UI panels.
 
 ## Risk tiers (what an AI step may do)
 
@@ -97,7 +97,7 @@ Python, FastAPI, Pydantic, Postgres (including the hash-chained ledger), a small
 ## Stages
 
 - **H0 kernel skeleton:** ledger with hash chain and verify endpoint, `/v1/decisions` and `/v1/events`, policy engine v1, Tool Gateway with risk tiers, invariant tests 1 to 8.
-- **H1 first workload:** Spellbreaker on the kernel with the real ULB risk model and the interception flow.
+- **H1 first workload:** Interception on the kernel with the real ULB risk model and the interception flow.
 - **H2 second workload and assurance:** OFAC payee screening as a plugin (proves the abstraction), replay and shadow mode, faithfulness checker, eval gating.
 - **H3 Decision Lab and hardening:** counterfactual estimators, conformal abstention, tenant isolation tests, load numbers.
 
@@ -139,8 +139,8 @@ Principle: an LLM step exists only where language adds value. Scoring, matching 
 
 | Agent | Workload | Job | Cannot do |
 |---|---|---|---|
-| Interviewer | Spellbreaker | Asks at most three adaptive questions when a payment is risky, extracts the customer's claims | Decide the outcome |
-| Explainer | Spellbreaker | Turns policy reasons and evidence ids into a plain-language warning | Add a fact that has no evidence id (checked) |
+| Interviewer | Interception | Asks at most three adaptive questions when a payment is risky, extracts the customer's claims | Decide the outcome |
+| Explainer | Interception | Turns policy reasons and evidence ids into a plain-language warning | Add a fact that has no evidence id (checked) |
 | Investigator | Case review | Summarises a case for an analyst, every claim cites evidence, may abstain | Take any action |
 | Screening adjudicator | Payee screening | Given candidate OFAC matches, returns match, no match, or needs human, with reasons | Clear a hit without a human at high risk |
 | Simulated scammer and victim (test only) | Assurance, v2 | Generate scenarios inside the sandbox to test defences | Run in the production path |
@@ -169,7 +169,7 @@ Risk scoring (ML model), sanctions candidate generation (algorithmic fuzzy match
 
 A skill bundles prompt templates, a tool allowlist, a policy pack, an eval suite and UI panels. Loading a skill is how a workload gets capabilities; nothing is global.
 
-- `payment-risk-interception` (Spellbreaker v1)
+- `payment-risk-interception` (Interception, v1)
 - `payee-screening` (second workload, v1)
 - `case-investigation` (analyst summary)
 - `scam-dialogue-eval` and `injection-redteam` (assurance, later)

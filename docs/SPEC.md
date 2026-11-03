@@ -1,72 +1,127 @@
-# Spellbreaker: master spec (v0.1, working name)
+# Project: SafePay Command, AI Decision Platform for Payment Risk, Screening and Investigation
 
-An independent, open portfolio project. It is not affiliated with, endorsed by or built from any company's data or code.
+Category: Applied AI Engineering · FinTech · Fraud and Scam Defence · LLM Applications
+Resume line (draft): "SafePay Command: an AI decision platform for payment risk, sanctions screening and fraud investigation, with policy-gated LLM steps, a tamper-evident audit ledger and simulator-validated impact measurement."
+Platform it runs on: the SafePay Harness (a runtime for policy-gated, auditable AI decisions)
+Repo: `safepay-command`. Independent portfolio project, not affiliated with any company.
 
-See `docs/HARNESS.md` for the runtime (the harness) that this product runs on.
+## 1. Project overview
 
-## One-line pitch
+SafePay Command is a financial-crime platform. It watches payment events, stops risky payments with explainable questions, screens payees against sanctions lists, groups related alerts into investigation cases, and gives fraud analysts evidence-cited AI summaries they can accept or override. Every decision is policy-checked, recorded in a tamper-evident ledger and replayable. A built-in assurance layer measures, with estimators checked against a simulator, whether each intervention really reduces loss.
 
-An evaluated payment-scam defence system: it intercepts risky payments with explainable questions, hands uncertain cases to an analyst with evidence-cited LLM summaries, and measures, with estimators checked against a simulator, whether each intervention actually reduces loss.
+It is one product made of five modules on one platform:
 
-## What it is not
+| Module | What it does |
+|---|---|
+| Workbench (the product face) | Case queue, evidence view, cited AI summary, analyst disposition, audit trail |
+| Interception (codename Spellbreaker) | Payment-time scam interception: score, at most three adaptive questions, then allow, warn, hold or block |
+| Screening | Payee and name screening on the OFAC list with an adjudicator step and human review |
+| Decision Lab | Replay, shadow mode and counterfactual estimators: naive vs corrected vs ground truth |
+| Graph and flywheel | Ring detection on a real labelled graph groups alerts into cases; analyst decisions become labels and improve the system, measured |
 
-- Not a prediction model in a notebook. The model is one component of a decision system with a user flow, an analyst flow, safety rules and measurement.
-- Not a demo with typed-in data. Every number the product shows comes from a pipeline and carries its provenance.
-- Not an attack playbook. Scam scenarios are abstract, structured templates used only to test defences.
+Scope decision (confirmed by the owner): financial crime and payment risk only. "Defense" means fraud defence and the platform's own defensive security, not the defence sector.
 
-## Users and flows
+## 2. Problem statement
 
-1. **Customer at payment time.** A payment is scored. Low risk passes. Risky payments get at most three adaptive questions, then one of: allow, warn, hold for review, block. The reason is shown in plain language.
-2. **Analyst.** A queue of held payments grouped into cases. Each case shows the evidence, a structured LLM summary where every claim cites an evidence id, and the analyst records a disposition. Everything is audit-logged.
-3. **Owner (evaluation view).** One page with the metrics below, per data source, with provenance.
+Fintechs process huge payment volumes. Scammers coach victims to lie, so a simple warning fails. Analysts work across fragmented tools and write inconsistent notes. Labels are censored: a blocked payment never shows whether it was fraud, so most teams cannot tell if a model or a friction step helps. Auditors ask who decided what and why, and AI makes that harder. Few teams can safely let an LLM near a payment decision.
 
-## Decision rule (safety principle)
+## 3. Proposed solution (pipeline)
 
-The LLM never moves money and never makes the final decision. A deterministic policy engine decides. The LLM may ask questions, explain, and summarise. Transaction memos and payee names are untrusted text and are treated as a prompt-injection surface.
+1. Ingest payment events with idempotency keys.
+2. Risk scoring: calibrated ML model plus deterministic rules.
+3. Interception: Interviewer step asks at most three adaptive questions; a deterministic policy engine decides allow, warn, hold or block; Explainer step writes the plain-language reason, every fact tied to an evidence id.
+4. Screening: algorithmic candidate matching against OFAC, an adjudicator step explains hits, humans clear high-risk ones.
+5. Case generation: related alerts grouped by graph clusters and shared entities.
+6. AI-assisted investigation: Investigator step summarises the case with citations and may abstain.
+7. Analyst review: inspect evidence, accept or override, record a disposition.
+8. Audit and replay: hash-chained ledger; any decision can be replayed with the same inputs and versions.
+9. Assurance and learning: dispositions feed labels; Decision Lab measures real effect versus naive estimates.
 
-## Layers and where the data comes from
+Design principle: the LLM assists, it never decides. A deterministic policy engine owns outcomes. Money-moving actions are tiered (T0 read, T1 customer-visible, T2 reversible hold, T3 irreversible); T2 and T3 need an allowing rule or a recorded approval. In this project T3 acts on a sandbox ledger only, never real money.
 
-| Layer | Data | Real or simulated |
+## 4. Platform: the Harness (OS analogy as design)
+
+Process = workflow run; system call = tool call through the Tool Gateway with a capability token; kernel = policy engine plus ledger; filesystem = hash-chained evidence ledger; drivers = connectors; interrupts = approvals; debugger = replay, shadow mode, counterfactuals.
+
+Layers: L0 connectors, L1 ledger and state (PII vault), L2 policy and capability kernel, L3 model gateway (ML and LLM routing, redaction, injection screening, structured outputs, budgets, registry), L4 agent runtime (state machines, idempotency, approvals), L5 assurance, L6 control plane (APIs, SSE, console), L7 workloads packaged as skills.
+
+Agents (LLM steps with schemas): Interviewer, Explainer, Investigator, Screening adjudicator. Test-only sandbox agents: scammer, victim, red-team. Not agents: risk model, candidate matcher, policy engine, faithfulness checker.
+Skills: `payment-risk-interception`, `payee-screening`, `case-investigation`.
+
+APIs (OpenAPI is the source of truth; full detail in `docs/HARNESS.md`): `/v1/events`, `/v1/decisions` (+`/replay`), `/v1/cases`, `/v1/runs`, `/v1/approvals`, `/v1/tools`, `/v1/policies` (+`/simulate`), `/v1/models`, `/v1/evals`, `/v1/audit` (+`/verify`), `/v1/connectors`, plus `/v1/screenings`, `/v1/graph/clusters`, `/v1/labels`, `/v1/experiments`, `/v1/simulations`, and an SSE stream.
+
+## 5. Core technologies
+
+| Layer | Technologies |
+|---|---|
+| Backend | Python, FastAPI, Pydantic, SQLAlchemy |
+| Database and ledger | PostgreSQL (hash-chained decision ledger) |
+| Machine learning | LightGBM, PyTorch (tabular model and graph model), scikit-learn, networkx or PyG, calibration |
+| Applied AI | LLM APIs with structured outputs, retrieval of evidence, deterministic faithfulness checker; local models in development, one cheap API model for final evals |
+| Frontend | Next.js console reading only from the API; SSE for live updates |
+| Infrastructure | Docker Compose, a cloud demo, GitHub Actions CI, OpenTelemetry traces |
+| Testing | pytest, property-based invariant tests, Playwright e2e |
+
+No Kafka until a measured throughput need appears. Early risk: local Python is 3.14, so check PyTorch and LightGBM wheel support in M1; otherwise pin Python 3.12 with uv.
+
+## 6. Data (real first; simulated only where none exists, always labelled)
+
+| Need | Source | Status |
 |---|---|---|
-| Transaction risk model | ULB credit card fraud (284,807 rows, 492 fraud) | Real, anonymised |
-| Scam text classifier | UCI SMS Spam Collection (5,574 messages) | Real, general spam |
-| Payee and name screening | OFAC SDN list | Real, official |
-| Ring / case grouping (v3) | Elliptic Bitcoin graph | Real, crypto |
-| Scam conversations, interventions, counterfactuals | Scenario simulator | Simulated, always labelled |
+| Transaction risk | ULB credit card fraud: 284,807 rows, 492 fraud, anonymised, no customer ids | Downloaded and validated |
+| Scam-like text | UCI SMS Spam: 5,574 messages, CC BY 4.0, general spam | Downloaded and validated |
+| Screening | OFAC SDN list: 19,485 entries | Downloaded and validated |
+| Graph rings | Elliptic Bitcoin graph: 203,769 nodes, 234,355 edges, crypto, licence unconfirmed | Links verified; fetch in M5 |
+| Negative names for screening evals | Public name lists (candidates: US Census surnames, SSA first names) | Verify in M3 |
+| Scam conversations, interventions, counterfactuals | Simulator calibrated to real marginals | Built in M4, labelled "simulated" |
 
-See `docs/DATA.md` for verification status and licence caveats.
+Honest limit: ULB lacks payee, device and call-in-progress signals, so scam context in the interception flow comes from the simulator and is labelled; the risk score itself comes from the real model.
 
-## Evaluation (the core of the project)
+## 7. Evaluation (no preset targets; measure and report with confidence intervals)
 
-Nothing here has a target number yet. We report what we measure, with confidence intervals.
+- Risk model: time-ordered split, PR-AUC, recall at 1% FPR, calibration error, p95 latency; LightGBM vs a small PyTorch model.
+- Text model: TF-IDF plus logistic regression vs a small fine-tuned model; cost and latency.
+- Screening: recall@k on perturbed real SDN names, false-positive rate on real non-sanctioned names, human-review rate.
+- Interception (simulated): interception rate by archetype and coaching level, false-friction rate, friction vs loss-prevented curve.
+- LLM steps: unsupported-claim rate (deterministic check of each cited fact), abstain rate, injection block rate, cost per 100 cases.
+- Decision Lab: bias and CI coverage of IPS, doubly robust and uplift estimators against the simulator's known counterfactuals, vs a naive comparison.
+- Graph: ring-detection precision and recall on a temporal split vs a features-only baseline.
+- Flywheel: precision at fixed recall as analyst feedback accumulates (simulated analysts, labelled).
 
-- Risk model: PR-AUC, recall at 1% false-positive rate, calibration error, latency p95.
-- Intervention quality: interception rate by scam archetype and coaching level; false-friction rate on legitimate payments; friction versus loss-prevented curve.
-- LLM summaries: unsupported-claim rate (a deterministic checker verifies each cited fact against the evidence), injection block rate, abstain rate.
-- Counterfactual estimators (v2): bias and confidence-interval coverage against the simulator's known ground truth, compared with a naive A/B comparison.
-- Cost: cost per 100 cases and per-model latency.
+## 8. Security of the platform (each threat has a test)
 
-## Staged delivery
+Prompt injection via memos, payee names and case notes (untrusted channel, screening, schema-only outputs). Forbidden tool use (capability tokens, tiers, policy has final say). Ledger tampering (hash chain and verify). Replay and duplicates (idempotency keys). PII leakage (vault tokens, canary tests). Cross-tenant access (tenant scoping). Feedback poisoning (label provenance, holdout). Cost abuse (budgets, rate limits).
 
-Each stage must be shippable on its own.
+Eight invariants become executable tests: no T2 or T3 without approval or rule; same inputs and versions reproduce the same outcome; ledger tampering is detected; LLM output changes an outcome only through validated policy fields; PII never reaches the model gateway unredacted; repeated idempotency key means one effect; shadow mode causes no side effect; no cross-tenant reads or actions.
 
-- **v1:** real risk model on ULB, text classifier on SMS, OFAC payee screening, interception flow, analyst workbench, faithfulness evals, deployed with CI.
-- **v2:** the simulator, counterfactual estimators, and the "naive vs corrected vs truth" result.
-- **v3:** graph-based ring detection (Elliptic) and conformal abstention for the LLM layer.
+## 9. What this project demonstrates
 
-Exit criteria for v1: pipeline reproduces from scratch, all pages render from live API data, e2e tests pass against the deployed app, README states every metric with its data source.
+- Designing production-oriented AI applications and integrating LLMs into a real workflow.
+- Combining classical ML, deep learning and LLM reasoning, with a deterministic safety kernel.
+- Evidence retrieval, citation-checked generation and honest abstention.
+- Rigorous evaluation: statistics, calibration, causal and counterfactual estimation, confidence intervals.
+- Event-style backend design, idempotency, audit, access control, defensive security.
+- Human-in-the-loop AI for financial services, and measuring product impact (friction vs loss).
+- Reproducible data work on real public datasets with provenance.
 
-## Provenance rules ("no fake data" contract)
+Rendering and "no fake data" rules: UI reads only from the API; no mock JSON; raw data checksummed and fetched by script; manifests generated; every number shows a provenance chip (real source or "simulated"); loading, empty and error states on every page; schema contracts; Playwright smoke tests against the deployed app; demo snapshots generated by the pipeline.
 
-1. The UI reads only from the API or database. No mock JSON in the repo.
-2. Raw files are downloaded by scripts, checked against a checksum in `data/registry.yaml`, and never committed.
-3. Every processed dataset has a generated manifest (row counts, date range, hash, download date).
-4. Every number in the UI shows a provenance chip: real source, or "simulated".
-5. Demo snapshots are generated by the pipeline, never typed.
+## 10. Roadmap (each milestone shippable)
 
-## Risks and open questions
+- M0 Foundations: done (spec, data register, real-data pipeline, 8 tests).
+- M1 Kernel: hash-chained ledger and verify, `/v1/events`, `/v1/decisions`, policy engine, tool gateway, idempotency, OpenAPI, CI. Exit: invariants 1, 2, 3, 6, 7 pass; replay reproduces outcomes.
+- M2 Risk and interception: ULB model with calibration and the PyTorch comparison, SMS model, model registry, Interviewer and Explainer, faithfulness checker, injection tests. Exit: generated metrics table; first shareable demo for the referrer.
+- M3 Screening: matcher, adjudicator, second skill loaded on the same kernel. Exit: recall and FPR tables with CIs; invariants hold for both workloads.
+- M4 Simulator and Decision Lab: scenario engine, sandbox agents, shadow mode, estimators validated against ground truth. Exit: "naive vs corrected vs truth" figure and measured CI coverage.
+- M5 Workbench, graph and flywheel: cases, Elliptic ring detection, Investigator, console with provenance chips, labels and flywheel experiment. Exit: graph metrics, unsupported-claim rate, UI renders only live data.
+- M6 Hardening and release: threat-model tests, tenant isolation, Playwright e2e on the deployed demo, p95 load numbers, model cards, PRD, README metric table, blog post and demo video. Exit: from-scratch reproduction; every README number regenerates from a command.
 
-- Licences: no formal licence text found for ULB, Elliptic or OFAC; see `docs/DATA.md`. Do not redistribute raw data; check terms before publishing derived datasets.
-- No public data of real scam conversations: that layer is simulated and its results are not evidence about real victims.
-- LLM provider and cost are undecided; evals will be repeated, so a cheap model and caching are needed.
-- Scope is large. Stages exist to stop it turning into three unfinished projects.
+Apply to the role now; share milestones with the referrer as they ship.
+
+## 11. Not claimed, risks and open decisions
+
+No regulatory compliance claim, no real money or customer data, no affiliation or branding of any company. Simulated results are not evidence about real victims. Licences for ULB, OFAC and Elliptic have no formal text found; do not redistribute raw data and settle terms before any public demo. Demand is an untested hypothesis (five practitioner conversations recommended). Scope is large, hence the milestones. Open: cheap API model and budget for final evals; policy language (typed Python DSL first, Cedar or OPA later); public or private demo; cloud target; negative-names dataset.
+
+## 12. Verification
+
+Per milestone: `python -m pytest -q` (unit, invariants, real-data integration); `python -m safepay_data all` reproduces data from scratch; tampering a ledger row makes `GET /v1/audit/verify` fail; a repeated idempotency key returns the same decision; Playwright e2e against the running console; a `make report` command regenerates every metrics table from raw data.

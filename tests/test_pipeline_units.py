@@ -2,9 +2,9 @@
 import io, zipfile
 import pandas as pd
 import pytest
-from spellbreaker_data.builders import parse_sms, parse_sdn
-from spellbreaker_data.manifest import check_expected
-from spellbreaker_data.registry import Dataset, load_registry
+from safepay_data.builders import parse_sms, parse_sdn
+from safepay_data.manifest import check_expected
+from safepay_data.registry import Dataset, load_registry
 
 
 def test_registry_is_complete_and_wellformed():

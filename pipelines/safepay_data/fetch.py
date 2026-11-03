@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .registry import Dataset, RAW
 
-UA = {"User-Agent": "spellbreaker-data/0.1 (portfolio project; reproducible download)"}
+UA = {"User-Agent": "safepay-data/0.1 (portfolio project; reproducible download)"}
 
 
 def _hash(path: Path, algo: str) -> str:

@@ -9,5 +9,5 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install pandas numpy scipy pyarrow pyyaml pytest
-      - run: cd pipelines && python -m spellbreaker_data all   # real downloads, checksum-verified
+      - run: cd pipelines && python -m safepay_data all   # real downloads, checksum-verified
       - run: python -m pytest -q

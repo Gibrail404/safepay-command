@@ -1,6 +1,6 @@
-# Spellbreaker
+# SafePay Command
 
-An evaluated payment-scam defence system, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
+An AI decision platform for payment risk, sanctions screening and fraud investigation, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
 
 **Status: v0.1, data foundation only.** The product (interception flow, analyst workbench, evaluations) is not built yet. This repo currently holds the master spec and a reproducible data pipeline that runs on real public datasets.
 
@@ -18,7 +18,7 @@ An evaluated payment-scam defence system, built in public as a portfolio project
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install pandas numpy scipy pyarrow pyyaml pytest
-cd pipelines && python -m spellbreaker_data all    # downloads and validates the real datasets (about 150 MB)
+cd pipelines && python -m safepay_data all    # downloads and validates the real datasets (about 150 MB)
 cd .. && python -m pytest -q                         # unit tests plus tests on the real data
 ```
 
