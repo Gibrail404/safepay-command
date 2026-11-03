@@ -130,3 +130,48 @@ Test: five short conversations with fraud or compliance practitioners. Ask what 
 - Which cheap API model to use for final evals, and the budget cap per full eval run.
 - Policy language: start with a typed Python DSL, or adopt Cedar or OPA from day one.
 - Whether the demo is public. Public means the data licence notes in `docs/DATA.md` must be settled first.
+
+## Agents, tools and skills in v1 (catalog)
+
+Principle: an LLM step exists only where language adds value. Scoring, matching and decisions stay deterministic or classical ML. Money-moving workflows are explicit state machines with LLM steps inside them, not autonomous agents talking to each other.
+
+### Agents (LLM steps, each with a structured output schema and an allowed-tools list)
+
+| Agent | Workload | Job | Cannot do |
+|---|---|---|---|
+| Interviewer | Spellbreaker | Asks at most three adaptive questions when a payment is risky, extracts the customer's claims | Decide the outcome |
+| Explainer | Spellbreaker | Turns policy reasons and evidence ids into a plain-language warning | Add a fact that has no evidence id (checked) |
+| Investigator | Case review | Summarises a case for an analyst, every claim cites evidence, may abstain | Take any action |
+| Screening adjudicator | Payee screening | Given candidate OFAC matches, returns match, no match, or needs human, with reasons | Clear a hit without a human at high risk |
+| Simulated scammer and victim (test only) | Assurance, v2 | Generate scenarios inside the sandbox to test defences | Run in the production path |
+| Red-team agent (test only) | Assurance, v3 | Generates injection and misuse attempts for the eval suites | Run in the production path |
+
+Genuinely multi-agent behaviour exists only in the test sandbox (scammer, victim, defender, red team). The production path uses one orchestrated workflow per decision.
+
+### Not agents
+
+Risk scoring (ML model), sanctions candidate generation (algorithmic fuzzy matching), the policy engine, and the faithfulness checker are deterministic or classical ML.
+
+### Tools (all called through the Tool Gateway with a capability token, a schema and an idempotency key)
+
+| Tool | Tier | Notes |
+|---|---|---|
+| get_payment_context, get_payee_history | T0 | Read only. Personal data arrives as tokens |
+| score_payment_risk | T0 | ML model, returns score and calibration band |
+| classify_text | T0 | Text model for scam-like messages |
+| lookup_sanctions | T0 | OFAC list candidates with match scores |
+| get_case_evidence | T0 | Read only |
+| ask_question, send_warning | T1 | Customer-visible, reversible, templates only |
+| create_case, hold_payment | T2 | Needs an allowing policy rule or an approval |
+| release_payment, block_account, file_report | T3 | Human approval only. In this project they act on a sandbox ledger, never real money |
+
+### Skills (packaged, versioned capability bundles that a workload loads)
+
+A skill bundles prompt templates, a tool allowlist, a policy pack, an eval suite and UI panels. Loading a skill is how a workload gets capabilities; nothing is global.
+
+- `payment-risk-interception` (Spellbreaker v1)
+- `payee-screening` (second workload, v1)
+- `case-investigation` (analyst summary)
+- `scam-dialogue-eval` and `injection-redteam` (assurance, later)
+
+Status: none of this is built yet. Only the data pipeline exists.
