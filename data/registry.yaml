@@ -1,0 +1,44 @@
+# Dataset registry. Every dataset the project uses is listed here with where it came from, how it was checked and what it may be used for.
+# The pipeline refuses to use a file whose checksum does not match. Facts below were verified on 2026-11-04 unless marked otherwise.
+datasets:
+  ulb_creditcard:
+    title: "Credit Card Fraud Detection (ULB / Worldline)"
+    role: "real transaction-risk labels: model training and evaluation (v1)"
+    url: "https://www.openml.org/data/download/1673544/phpKo8OWT"
+    format: arff
+    md5: "178bcf9bb1f31a3dfe12d0e577884add"   # from the OpenML API, data id 1597
+    expected: { rows: 284807, positives: 492 }
+    licence_note: "OpenML licence field says 'Public'; no formal licence text found. Cite the authors; do not redistribute the raw file."
+    citation: "Dal Pozzolo, Caelen, Johnson, Bontempi. Calibrating Probability with Undersampling for Unbalanced Classification. IEEE CIDM 2015."
+    caveat: "Features V1-V28 are anonymised PCA components; no customer ids, so no per-customer history."
+  sms_spam:
+    title: "SMS Spam Collection (UCI)"
+    role: "real scam-like text for the text classifier (v1)"
+    url: "https://archive.ics.uci.edu/static/public/228/sms+spam+collection.zip"
+    format: zip
+    expected: { rows: 5574 }
+    licence_note: "CC BY 4.0 (stated on the UCI page). Attribution required."
+    citation: "Almeida, T. & Hidalgo, J. (2011). SMS Spam Collection. UCI Machine Learning Repository. https://doi.org/10.24432/C5CC84"
+    caveat: "General spam, not payment scams specifically."
+  ofac_sdn:
+    title: "OFAC Specially Designated Nationals list"
+    role: "real payee / name screening (v1 or v2)"
+    url: "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV"
+    format: csv
+    licence_note: "Official US Treasury publication. Public-domain status NOT confirmed: read OFAC's terms before publishing derived data."
+    caveat: "Changes over time: store the download date and hash with every use."
+  elliptic:
+    title: "Elliptic Data Set (labelled Bitcoin transaction graph)"
+    role: "real graph for ring / case-grouping detection (v3)"
+    url: "https://data.pyg.org/datasets/elliptic/elliptic_txs_features.csv.zip"   # plus edgelist and classes files next to it
+    format: zip
+    expected: { nodes: 203769, edges: 234355, features: 166 }
+    licence_note: "Original licence text NOT found. A Hugging Face mirror claims MIT but that is not authoritative. Check the Kaggle page before publishing results."
+    caveat: "Crypto, not card payments. Used only to test graph-based grouping."
+simulated:
+  scam_dialogues:
+    why: "No public dataset of real bank scam conversations exists."
+    rule: "Generated from structured scam archetypes, calibrated against real marginals where possible, and ALWAYS labelled 'simulated' in the product and in every metric."
+not_used:
+  ieee_cis: "Competition data: reuse rules unclear. Not used unless the terms are checked."
+  tabformer: "Synthetic and licence unverified. Not used for now."
