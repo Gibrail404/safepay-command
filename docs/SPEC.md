@@ -73,15 +73,22 @@ No Kafka until a measured throughput need appears. Early risk: local Python is 3
 - **Queues and streaming:** none at first (in-process async plus a Postgres jobs table). Kafka only if a measured throughput need appears.
 - **Machine facts checked on 2026-11-04:** Docker 29.2.1, Ollama 0.33.2, uv, Node and npm are installed; Python is 3.14.7. `pip index` lists torch 2.15.0 and lightgbm 4.7.0 for this interpreter; a real install and import test is the first task of M1, with a fallback to Python 3.12 through uv.
 
-### LLM in a deployed demo (decision 2026-11-04)
+### LLM in the deployed demo (decision 2026-11-04)
 
-Local Ollama exists only on the developer's machine, so a deployed demo cannot depend on it. The model gateway therefore has three interchangeable providers behind one interface:
+Visitors, interviewers and engineers will use the demo online, and its Interviewer and Explainer steps run on a real LLM. The model gateway talks to **Ollama Cloud** (base URL `https://ollama.com`, `Authorization: Bearer <OLLAMA_API_KEY>`, chat endpoint `/api/chat`, model list at `/api/tags`). The key is created at ollama.com/settings/keys and set by the owner in the host's secret store and in a local `.env`; it is never in the repo or in a chat.
 
-1. **Hosted, OpenAI-compatible API** (base URL, key and model from environment variables, never in the repo). This is what the deployed demo uses, with a hard per-run and per-day spend cap.
-2. **Ollama** for local development and offline tests.
-3. **Deterministic fallback**: template-based Interviewer and Explainer output. It is used when no key is set, when the budget is exhausted, or when the provider fails, so the deployed app never breaks. It is also the baseline that the LLM versions are measured against in the evaluations.
+Facts read from Ollama's own documentation on 2026-11-04 and their consequences:
+- Ollama Cloud **does not support structured outputs** (JSON-schema constrained decoding). The gateway therefore asks for JSON in the prompt, validates every reply with Pydantic, retries once with the validation error, and falls back to the deterministic path if it still fails. Nothing in the kernel trusts model output without validation.
+- Cloud pricing and plans changed on 2026-08-31 and third-party sources disagree. Pricing must be read on ollama.com/pricing, so the gateway enforces a hard per-run and per-day spend cap, a concurrency limit, and timeouts, and treats HTTP 429 as "use the fallback".
+- Cloud model names change and retire; the model is an environment variable (`LLM_MODEL`), never hard-coded.
+
+Providers behind one interface: **Ollama Cloud** (deployed demo), **local Ollama** (offline development and tests), and a **deterministic template fallback** (no key, budget exhausted or provider failure). The fallback also serves as the baseline the LLM versions are measured against, and the UI labels which path produced each text. Candidate models are compared by the project's own evaluation (cost, latency, unsupported-claim rate, schema-failure rate) before one is chosen.
 
 Trained models (LightGBM and the text model, about 1.5 MB in total) ship inside the container image and need no GPU. The database is managed PostgreSQL. The cloud target stays an open decision for M6.
+
+### Fine-tuning
+
+No LLM is fine-tuned in the current plan. The models trained in M2 (LightGBM, a small PyTorch network, TF-IDF with logistic regression) are trained from scratch on the project's own data; that is training, not fine-tuning. The LLM steps use prompting, validation and fallbacks. An optional later step (M2e) fine-tunes a small pretrained encoder on the SMS data with PyTorch and compares it with the TF-IDF model on accuracy, latency and cost.
 
 ### API keys and secrets
 
@@ -90,7 +97,7 @@ Trained models (LightGBM and the text model, about 1.5 MB in total) ship inside 
 | ULB, UCI SMS Spam, OFAC downloads | None | Works today |
 | Elliptic via the PyG mirror | None (licence unconfirmed) | M5 |
 | Development LLM | None (local Ollama) | M2 |
-| Final-eval LLM | One provider API key (open decision), with a spend limit | M2 onwards |
+| Deployed-demo and final-eval LLM | `OLLAMA_API_KEY` (Ollama Cloud), with a hard spend cap | M2d onwards |
 | Postgres | Connection string; local Docker Compose, no cloud key | M1 |
 | Cloud demo | Cloud credentials, chosen at M6 | M6 |
 
