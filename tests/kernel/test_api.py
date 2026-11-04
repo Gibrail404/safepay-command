@@ -141,3 +141,18 @@ def test_shadow_mode_over_http(client):
 def test_unknown_workload_is_a_clean_422(client):
     r = client.post("/v1/decisions", json={**REQ, "workload": "nope"}, headers={**A, "Idempotency-Key": "z"})
     assert r.status_code == 422
+
+
+def test_simulation_endpoint_returns_labelled_simulated_truth_and_is_deterministic(client):
+    body = {"warn_from": 0.8, "hold_from": 1.6, "n": 20000, "seed": 3}
+    r1, r2 = client.post("/v1/simulations", json=body, headers=A), client.post("/v1/simulations", json=body, headers=A)
+    assert r1.status_code == 200 and r1.json() == r2.json()
+    out = r1.json()
+    assert out["provenance"] == "simulated" and 0 <= out["result"]["scam_money_stopped_share"] <= 1 and out["assumptions"]["scam_rate"] == 0.02
+
+
+def test_simulation_endpoint_rejects_bad_input_and_needs_a_key(client):
+    assert client.post("/v1/simulations", json={"warn_from": 2, "hold_from": 1}, headers=A).status_code == 422
+    assert client.post("/v1/simulations", json={"warn_from": 0, "hold_from": 1, "n": 10**9}, headers=A).status_code == 422
+    assert client.post("/v1/simulations", json={"warn_from": 0, "hold_from": 1}).status_code == 401
+    assert client.post("/v1/simulations", json={"warn_from": 0, "hold_from": 1, "n": 5000}, headers=B).status_code == 200

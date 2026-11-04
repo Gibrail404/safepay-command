@@ -437,6 +437,49 @@
         "title": "SimulateIn",
         "type": "object"
       },
+      "SimulationIn": {
+        "properties": {
+          "hold_from": {
+            "maximum": 100.0,
+            "minimum": -10.0,
+            "title": "Hold From",
+            "type": "number"
+          },
+          "n": {
+            "default": 100000,
+            "maximum": 300000.0,
+            "minimum": 1000.0,
+            "title": "N",
+            "type": "integer"
+          },
+          "scam_rate": {
+            "default": 0.02,
+            "exclusiveMinimum": 0.0,
+            "maximum": 0.2,
+            "title": "Scam Rate",
+            "type": "number"
+          },
+          "seed": {
+            "default": 0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "warn_from": {
+            "maximum": 100.0,
+            "minimum": -10.0,
+            "title": "Warn From",
+            "type": "number"
+          }
+        },
+        "required": [
+          "warn_from",
+          "hold_from"
+        ],
+        "title": "SimulationIn",
+        "type": "object"
+      },
       "ToolCallIn": {
         "properties": {
           "args": {
@@ -1193,6 +1236,61 @@
           }
         },
         "summary": "Start Run"
+      }
+    },
+    "/v1/simulations": {
+      "post": {
+        "description": "Run a threshold policy on SIMULATED payments with known ground truth. Read-only: nothing is stored and nothing touches the ledger or real data.",
+        "operationId": "simulate_policy_v1_simulations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Simulate Policy"
       }
     },
     "/v1/tools": {

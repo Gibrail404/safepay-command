@@ -37,20 +37,22 @@ def _log(pop, log_pi, seed):
     return log_data(pop, log_pi, seed)
 
 
+def policy_truth(pop, cfg: SimConfig, warn_at: float, hold_at: float) -> dict:
+    """Truth about one threshold policy on a simulated population: scam money stopped, good customers bothered, value per payment."""
+    scam_money = float((pop.scam * pop.amount).sum())
+    p = threshold_policy(warn_at, hold_at)(pop.x)
+    legit = pop.scam == 0
+    sent = cfg.warn_ignore_uncoached + (1 - cfg.warn_ignore_uncoached) * pop.coached
+    missed = 1 - (cfg.hold_catch_uncoached * (1 - pop.coached) + cfg.hold_catch_coached * pop.coached)
+    loss = float((pop.scam * pop.amount * (p[:, ALLOW] + p[:, WARN] * sent + p[:, HOLD] * missed)).sum())
+    return {"hold_from": hold_at, "warn_from": warn_at, "scam_money_stopped_share": (1 - loss / scam_money) if scam_money else 0.0,
+            "good_payments_warned_share": float(p[legit, WARN].mean()), "good_payments_held_share": float(p[legit, HOLD].mean()), "value_per_payment": true_value(pop, threshold_policy(warn_at, hold_at))}
+
+
 def frontier(cfg: SimConfig, n: int = 400_000, seed: int = 3) -> list[dict]:
     """Truth about a family of policies: how much scam money each stops against how many good customers it bothers."""
     pop = sample_population(n, seed, cfg)
-    scam_money = float((pop.scam * pop.amount).sum())
-    rows = []
-    for hold_at in (0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 3.0, 99.0):
-        pi = threshold_policy(hold_at - 0.4, hold_at)
-        p = pi(pop.x)
-        loss = float((-(p * pop.expected_reward).sum(axis=1) - (p[:, HOLD] * cfg.review_cost) - (1 - pop.scam) * (p[:, WARN] * cfg.legit_abandon_warn + p[:, HOLD] * cfg.legit_abandon_hold) * cfg.abandon_cost).sum())
-        stopped = scam_money - loss
-        legit = pop.scam == 0
-        rows.append({"hold_from": hold_at, "warn_from": hold_at - 0.4, "scam_money_stopped_share": stopped / scam_money, "good_payments_warned_share": float(p[legit, WARN].mean()),
-                     "good_payments_held_share": float(p[legit, HOLD].mean()), "value_per_payment": true_value(pop, pi)})
-    return rows
+    return [policy_truth(pop, cfg, h - 0.4, h) for h in (0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 3.0, 99.0)]
 
 
 def by_archetype(cfg: SimConfig, warn_at: float = 0.8, hold_at: float = 1.6, n: int = 400_000, seed: int = 4) -> list[dict]:

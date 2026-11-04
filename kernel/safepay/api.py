@@ -49,6 +49,21 @@ class ApprovalIn(BaseModel):
     approve: bool
 
 
+class SimulationIn(BaseModel):
+    warn_from: float = Field(ge=-10, le=100)
+    hold_from: float = Field(ge=-10, le=100)
+    n: int = Field(default=100_000, ge=1_000, le=300_000)
+    seed: int = Field(default=0, ge=0, le=10**9)
+    scam_rate: float = Field(default=0.02, gt=0, le=0.2)
+
+    @field_validator("hold_from")
+    @classmethod
+    def hold_not_below_warn(cls, v, info):
+        if "warn_from" in info.data and v < info.data["warn_from"]:
+            raise ValueError("hold_from must be at least warn_from")
+        return v
+
+
 class SimulateIn(BaseModel):
     policy: Policy
     contexts: list[dict] = Field(max_length=500)
@@ -162,6 +177,19 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     def simulate(body: SimulateIn, tenant: str = Depends(tenant_of)):
         """Run a candidate policy over supplied contexts. Nothing is stored and no ledger entry is written."""
         return {"policy_version": body.policy.version, "results": [evaluate(body.policy, c).model_dump() for c in body.contexts]}
+
+    @app.post("/v1/simulations")
+    def simulate_policy(body: SimulationIn, tenant: str = Depends(tenant_of)):
+        """Run a threshold policy on SIMULATED payments with known ground truth. Read-only: nothing is stored and nothing touches the ledger or real data."""
+        try:
+            from dataclasses import asdict, replace
+            from safepay_lab.experiments import policy_truth
+            from safepay_lab.simulator import SimConfig, sample_population
+        except ImportError:
+            raise HTTPException(501, "the simulation package is not installed on this server")
+        cfg = replace(SimConfig(), scam_rate=body.scam_rate)
+        return {"provenance": "simulated", "note": "Simulated payments with assumed scam behaviour; amounts follow the real ULB card data. Not evidence about real customers.",
+                "assumptions": asdict(cfg), "n": body.n, "seed": body.seed, "result": policy_truth(sample_population(body.n, body.seed, cfg), cfg, body.warn_from, body.hold_from)}
 
     @app.get("/v1/tools")
     def list_tools(tenant: str = Depends(tenant_of)):

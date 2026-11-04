@@ -1,0 +1,139 @@
+{
+  "reps": "6 to 20",
+  "base_config": {
+    "scam_rate": 0.02,
+    "log_amount_mean": 3.005,
+    "log_amount_sd": 1.87,
+    "scam_log_amount_shift": 1.2,
+    "score_separation": 1.8,
+    "archetype_share": [
+      0.35,
+      0.25,
+      0.25,
+      0.15
+    ],
+    "coaching_by_archetype": [
+      0.9,
+      0.5,
+      0.6,
+      0.0
+    ],
+    "warn_ignore_uncoached": 0.25,
+    "hold_catch_uncoached": 0.9,
+    "hold_catch_coached": 0.55,
+    "legit_abandon_warn": 0.02,
+    "legit_abandon_hold": 0.12,
+    "abandon_cost": 20.0,
+    "review_cost": 5.0,
+    "amount_cap": 5000.0,
+    "epsilon": 0.1
+  },
+  "by_size": {
+    "20000": {
+      "rank_correlation_with_true_uplift": {
+        "risk_score": 0.19503520137637664,
+        "estimated_uplift_mean": 0.035744433773294074,
+        "estimated_uplift_sd": 0.06481322506767997
+      },
+      "values": {
+        "0.05": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.3946531328448835,
+          "hold_top_by_estimated_uplift": -4.947086270929727,
+          "hold_top_by_true_uplift_oracle": -2.1802421448746485,
+          "uplift_minus_score_mean": -0.5524331380848431,
+          "uplift_better_share": 0.3
+        },
+        "0.1": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.061085468514197,
+          "hold_top_by_estimated_uplift": -5.4949184287948345,
+          "hold_top_by_true_uplift_oracle": -2.550242144874649,
+          "uplift_minus_score_mean": -1.4338329602806363,
+          "uplift_better_share": 0.2
+        },
+        "0.2": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.192103281452868,
+          "hold_top_by_estimated_uplift": -6.70190968843779,
+          "hold_top_by_true_uplift_oracle": -3.290242144874649,
+          "uplift_minus_score_mean": -2.5098064069849233,
+          "uplift_better_share": 0.05
+        }
+      },
+      "reps": 20,
+      "n": 20000
+    },
+    "100000": {
+      "rank_correlation_with_true_uplift": {
+        "risk_score": 0.19503520137637664,
+        "estimated_uplift_mean": 0.029492748265346296,
+        "estimated_uplift_sd": 0.08242856334894771
+      },
+      "values": {
+        "0.05": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.394653132844885,
+          "hold_top_by_estimated_uplift": -4.028181499117339,
+          "hold_top_by_true_uplift_oracle": -2.1802421448746485,
+          "uplift_minus_score_mean": 0.36647163372754665,
+          "uplift_better_share": 0.5
+        },
+        "0.1": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.061085468514198,
+          "hold_top_by_estimated_uplift": -5.399569615860575,
+          "hold_top_by_true_uplift_oracle": -2.550242144874649,
+          "uplift_minus_score_mean": -1.3384841473463764,
+          "uplift_better_share": 0.25
+        },
+        "0.2": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.192103281452867,
+          "hold_top_by_estimated_uplift": -6.210964539302339,
+          "hold_top_by_true_uplift_oracle": -3.290242144874649,
+          "uplift_minus_score_mean": -2.018861257849473,
+          "uplift_better_share": 0.0
+        }
+      },
+      "reps": 12,
+      "n": 100000
+    },
+    "400000": {
+      "rank_correlation_with_true_uplift": {
+        "risk_score": 0.19503520137637664,
+        "estimated_uplift_mean": 0.1190511413084724,
+        "estimated_uplift_sd": 0.036894895378801126
+      },
+      "values": {
+        "0.05": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.394653132844884,
+          "hold_top_by_estimated_uplift": -3.2474374107902313,
+          "hold_top_by_true_uplift_oracle": -2.1802421448746485,
+          "uplift_minus_score_mean": 1.147215722054653,
+          "uplift_better_share": 1.0
+        },
+        "0.1": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.0610854685141975,
+          "hold_top_by_estimated_uplift": -3.6997758082542176,
+          "hold_top_by_true_uplift_oracle": -2.550242144874649,
+          "uplift_minus_score_mean": 0.3613096602599805,
+          "uplift_better_share": 0.6666666666666666
+        },
+        "0.2": {
+          "allow_everything": -6.169547711928963,
+          "hold_top_by_score": -4.192103281452867,
+          "hold_top_by_estimated_uplift": -4.291141297364045,
+          "hold_top_by_true_uplift_oracle": -3.290242144874649,
+          "uplift_minus_score_mean": -0.09903801591117796,
+          "uplift_better_share": 0.5
+        }
+      },
+      "reps": 6,
+      "n": 400000
+    }
+  },
+  "seconds": 22
+}
