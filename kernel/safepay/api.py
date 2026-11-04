@@ -1,9 +1,10 @@
 """HTTP API (v1). Tenant comes from the API key, never from a client-supplied field."""
 from __future__ import annotations
-import json, uuid
+import hmac, json, re, uuid
 from typing import Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from . import ledger
@@ -14,9 +15,22 @@ from .policy import Policy, evaluate
 from .tools import CallResult, ToolGateway, ToolRegistry, mint_capability
 
 
+MAX_BODY_BYTES = 256_000                    # one request body, checked from Content-Length before it is read
+MAX_JSON_BYTES = 64_000                     # one free-form object once parsed
+KEY_FORMAT = re.compile(r"^[A-Za-z0-9._:\-]{1,128}$")
+
+
+def _bounded(v: dict) -> dict:
+    if len(json.dumps(v, separators=(",", ":"))) > MAX_JSON_BYTES:
+        raise ValueError(f"object larger than {MAX_JSON_BYTES} bytes")
+    return v
+
+
 class EventIn(BaseModel):
     type: str = Field(min_length=1, max_length=64)
     data: dict
+
+    _cap = field_validator("data")(_bounded)
 
 
 class RunIn(BaseModel):
@@ -55,17 +69,27 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     decisions = DecisionService(sf, store.for_workload)
     gateway = ToolGateway(sf, registry, settings.capability_secret)
     app = FastAPI(title="SafePay Command kernel", version="0.2.0")
+
+    @app.middleware("http")
+    async def limit_body(request, call_next):
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+            return JSONResponse({"detail": f"request body larger than {MAX_BODY_BYTES} bytes"}, status_code=413)
+        return await call_next(request)
     app.state.sf = sf                       # exposed so tests can reach the database directly
 
     def tenant_of(x_api_key: str | None = Header(default=None)) -> str:
-        tenant = settings.tenants.get(x_api_key or "")
+        tenant = None
+        for known, t in settings.tenants.items():          # constant-time comparison so response time does not reveal how much of a key matched
+            if hmac.compare_digest(known.encode(), (x_api_key or "").encode()):
+                tenant = t
         if tenant is None:
             raise HTTPException(401, "missing or unknown API key")
         return tenant
 
     def need_key(idempotency_key: str | None) -> str:
-        if not idempotency_key or len(idempotency_key) > 128:
-            raise HTTPException(400, "Idempotency-Key header is required (max 128 characters)")
+        if not idempotency_key or not KEY_FORMAT.match(idempotency_key):
+            raise HTTPException(400, "Idempotency-Key header is required (1 to 128 characters: letters, digits and . _ : -)")
         return idempotency_key
 
     @app.get("/healthz")

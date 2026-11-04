@@ -2,13 +2,20 @@
 Redaction is the real protection for personal data; injection screening is only a heuristic signal, because the real defences are that the LLM
 has no tools, its output is schema-validated, and the policy engine decides."""
 from __future__ import annotations
-import re
+import re, unicodedata
 from dataclasses import dataclass, field
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 EMIRATES_ID = re.compile(r"\b784[-\s]?\d{4}[-\s]?\d{7}[-\s]?\d\b")
-IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")
+IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b", re.I)
 LONG_DIGITS = re.compile(r"(?<![\w.])\+?\d(?:[\d\s\-().]{6,}\d)(?![\w])")        # candidates for cards and phone numbers
+
+
+def normalise(text: str) -> str:
+    """Fold look-alike forms (fullwidth letters and digits) and drop invisible format characters (zero-width spaces and joiners),
+    so that neither redaction nor injection screening can be dodged by typography. Applied before both."""
+    folded = unicodedata.normalize("NFKC", text)
+    return "".join(ch for ch in folded if unicodedata.category(ch) != "Cf")
 
 
 def luhn_ok(digits: str) -> bool:
@@ -32,6 +39,7 @@ class Redaction:
 
 
 def redact(text: str) -> Redaction:
+    text = normalise(text)
     mapping: dict[str, str] = {}
 
     def put(kind: str, original: str) -> str:
@@ -67,10 +75,11 @@ _INJECTION = [re.compile(p, re.I | re.S) for p in INJECTION_PATTERNS]
 
 
 def injection_flags(text: str) -> list[str]:
+    text = normalise(text)
     return [p.pattern for p in _INJECTION if p.search(text)]
 
 
 def wrap_untrusted(text: str) -> str:
     """Delimit untrusted text so the model is told it is data. The delimiter itself cannot be forged from inside the text."""
-    cleaned = text.replace("<untrusted>", "").replace("</untrusted>", "")
+    cleaned = normalise(text).replace("<untrusted>", "").replace("</untrusted>", "")
     return f"<untrusted>\n{cleaned}\n</untrusted>"

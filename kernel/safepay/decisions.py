@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json, uuid
 from typing import Callable, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,6 +16,13 @@ class DecisionRequest(BaseModel):
     subject: dict
     context: dict
     mode: Literal["enforce", "shadow"] = "enforce"
+
+    @field_validator("subject", "context")
+    @classmethod
+    def _bounded(cls, v: dict) -> dict:
+        if len(json.dumps(v, separators=(",", ":"))) > 64_000:
+            raise ValueError("object larger than 64000 bytes")
+        return v
 
 
 class DecisionResponse(PolicyResult):

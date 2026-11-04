@@ -89,6 +89,9 @@ class LLMRequest:
     check: Callable[[BaseModel], list[str]] | None = None      # deterministic checks run after schema validation; any issue triggers the repair attempt
 
 
+MAX_UNTRUSTED_CHARS = 4000
+
+
 @dataclass
 class LLMResult:
     parsed: BaseModel
@@ -110,8 +113,9 @@ class LLMGateway:
         self._cool: dict[str, float] = {}
 
     def generate(self, req: LLMRequest, run_id: str, fallback: Callable[[], T]) -> LLMResult:
-        red = redact(req.untrusted) if req.untrusted else None
-        flags = injection_flags(req.untrusted) if req.untrusted else []
+        untrusted = req.untrusted[:MAX_UNTRUSTED_CHARS] if req.untrusted else req.untrusted      # bounds cost and latency; customer text beyond this adds no evidence
+        red = redact(untrusted) if untrusted else None
+        flags = injection_flags(untrusted) if untrusted else []
         schema = to_plain_schema(req.output)
         system = f"{SYSTEM_RULES}\nTask: {req.task}\nJSON Schema: {json.dumps(schema, separators=(',', ':'))}"
         user0 = wrap_untrusted(red.text) if red else "(no customer text)"
