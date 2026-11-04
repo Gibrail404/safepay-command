@@ -73,16 +73,22 @@ No Kafka until a measured throughput need appears. Early risk: local Python is 3
 - **Queues and streaming:** none at first (in-process async plus a Postgres jobs table). Kafka only if a measured throughput need appears.
 - **Machine facts checked on 2026-11-04:** Docker 29.2.1, Ollama 0.33.2, uv, Node and npm are installed; Python is 3.14.7. `pip index` lists torch 2.15.0 and lightgbm 4.7.0 for this interpreter; a real install and import test is the first task of M1, with a fallback to Python 3.12 through uv.
 
-### LLM in the deployed demo (decision 2026-11-04)
+### LLM in the deployed demo (decision 2026-11-04, provider order recommended, pending the owner's key)
 
-Visitors, interviewers and engineers will use the demo online, and its Interviewer and Explainer steps run on a real LLM. The model gateway talks to **Ollama Cloud** (base URL `https://ollama.com`, `Authorization: Bearer <OLLAMA_API_KEY>`, chat endpoint `/api/chat`, model list at `/api/tags`). The key is created at ollama.com/settings/keys and set by the owner in the host's secret store and in a local `.env`; it is never in the repo or in a chat.
+Visitors, interviewers and engineers use the demo online, and its Interviewer and Explainer steps run on a real LLM. The model gateway has one interface and these providers:
 
-Facts read from Ollama's own documentation on 2026-11-04 and their consequences:
-- Ollama Cloud **does not support structured outputs** (JSON-schema constrained decoding). The gateway therefore asks for JSON in the prompt, validates every reply with Pydantic, retries once with the validation error, and falls back to the deterministic path if it still fails. Nothing in the kernel trusts model output without validation.
-- Cloud pricing and plans changed on 2026-08-31 and third-party sources disagree. Pricing must be read on ollama.com/pricing, so the gateway enforces a hard per-run and per-day spend cap, a concurrency limit, and timeouts, and treats HTTP 429 as "use the fallback".
-- Cloud model names change and retire; the model is an environment variable (`LLM_MODEL`), never hard-coded.
+1. **Gemini API (recommended primary).** It supports JSON-schema constrained output natively, so replies are valid JSON by construction. Free-of-charge models listed in Google's pricing page on 2026-11-04 include `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` and `gemini-2.5-flash-lite`; `gemini-4-argon` is not free. Model ids and plans change quickly (for example `gemini-2.5-flash` and `gemini-2.5-pro` are deprecated and route to newer models from 2026-12-01), so the model is an environment variable and is chosen by the project's own evaluation. The key is `GEMINI_API_KEY`, created in Google AI Studio.
+2. **Ollama Cloud** (`https://ollama.com`, `OLLAMA_API_KEY`). It does not support structured outputs today, so replies are validated and retried. Kept as a second provider and a comparison point.
+3. **Local Ollama** for offline development and tests (structured outputs work locally).
+4. **Deterministic template fallback**: no key, budget exhausted, provider failure or rate limit. It is the baseline the LLM versions must beat, and the UI labels which path produced each text.
 
-Providers behind one interface: **Ollama Cloud** (deployed demo), **local Ollama** (offline development and tests), and a **deterministic template fallback** (no key, budget exhausted or provider failure). The fallback also serves as the baseline the LLM versions are measured against, and the UI labels which path produced each text. Candidate models are compared by the project's own evaluation (cost, latency, unsupported-claim rate, schema-failure rate) before one is chosen.
+Rules that hold for every provider: every reply is validated with Pydantic (constrained decoding does not enforce everything, for example Gemini ignores `minLength` and `maxLength`); one retry with the validation error; hard per-run and per-day spend and request caps; timeouts; HTTP 429 means use the fallback; server-side caching and per-IP limits for the public demo.
+
+Data-use warning: on Gemini's free tier, Google states that content may be used to improve its products; on the paid tier it is not. The demo therefore sends only synthetic or public data, redacts personal data in the gateway before any call, and shows a notice not to enter real personal information. If real visitor traffic is expected, either enable paid billing with a low cap or keep the notice and redaction.
+
+Gemini limits apply per project, not per key, and the active limits are shown at aistudio.google.com/rate-limit. A Jio "Google AI Pro" subscription is a consumer plan for the Gemini app; no source found says it changes API quotas, so the API key is created in AI Studio and runs on its own free tier unless billing is enabled.
+
+Secrets: keys live in a git-ignored `.env` locally and in the host's secret store when deployed. They are never pasted into a chat.
 
 Trained models (LightGBM and the text model, about 1.5 MB in total) ship inside the container image and need no GPU. The database is managed PostgreSQL. The cloud target stays an open decision for M6.
 
@@ -97,7 +103,7 @@ No LLM is fine-tuned in the current plan. The models trained in M2 (LightGBM, a 
 | ULB, UCI SMS Spam, OFAC downloads | None | Works today |
 | Elliptic via the PyG mirror | None (licence unconfirmed) | M5 |
 | Development LLM | None (local Ollama) | M2 |
-| Deployed-demo and final-eval LLM | `OLLAMA_API_KEY` (Ollama Cloud), with a hard spend cap | M2d onwards |
+| Deployed-demo and final-eval LLM | `GEMINI_API_KEY` (Google AI Studio; recommended primary), optionally `OLLAMA_API_KEY`; hard spend and request caps | M2d onwards |
 | Postgres | Connection string; local Docker Compose, no cloud key | M1 |
 | Cloud demo | Cloud credentials, chosen at M6 | M6 |
 
