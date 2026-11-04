@@ -86,6 +86,7 @@ class LLMRequest:
     output: type[BaseModel]        # flat Pydantic model the reply must satisfy
     untrusted: str = ""            # customer-supplied text: redacted, delimited, and treated as data
     max_tokens: int = 400
+    check: Callable[[BaseModel], list[str]] | None = None      # deterministic checks run after schema validation; any issue triggers the repair attempt
 
 
 @dataclass
@@ -138,11 +139,16 @@ class LLMGateway:
                         self._cool[prov.name] = self.clock() + self.cooldown_s
                     break                                         # a transport failure moves on to the next provider
                 self.budget.add_tokens((reply.tokens_in or 0) + (reply.tokens_out or 0))
+                kind, issues = "schema", []
                 try:
                     parsed = req.output.model_validate(extract_json(reply.text))
+                    if req.check is not None:
+                        kind, issues = "check", req.check(parsed)
+                        if issues:
+                            raise ValueError("; ".join(issues))
                 except (ValueError, ValidationError) as e:
                     error_text = str(e).replace("\n", " ")[:300]
-                    result.attempts.append({"provider": prov.name, "ok": False, "reason": "invalid reply", "ms": round((self.clock() - t0) * 1000)})
+                    result.attempts.append({"provider": prov.name, "ok": False, "reason": "invalid reply", "kind": kind, "detail": error_text, "ms": round((self.clock() - t0) * 1000)})
                     user = f"{user0}\n\nYour previous reply was invalid ({error_text}). Reply again with ONLY the JSON object."
                     continue                                      # one repair attempt on the same provider
                 result.attempts.append({"provider": prov.name, "ok": True, "ms": round((self.clock() - t0) * 1000)})

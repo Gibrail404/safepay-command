@@ -1,10 +1,121 @@
 {
-  "name": "payment_risk_v1",
+  "name": "payment_risk_v2",
   "rules": [
-    { "id": "R01", "code": "LARGE_AMOUNT", "when": { "field": "amount", "op": ">=", "value": 3000 }, "outcome": "warn" },
-    { "id": "R02", "code": "MODEL_RISK_ELEVATED", "when": { "field": "risk_band", "op": "==", "value": "elevated" }, "outcome": "warn" },
-    { "id": "R03", "code": "NEW_PAYEE_LARGE_AMOUNT", "when": { "all": [ { "field": "payee_age_days", "op": "<", "value": 1 }, { "field": "amount", "op": ">=", "value": 3000 } ] }, "outcome": "hold" },
-    { "id": "R04", "code": "MODEL_RISK_HIGH", "when": { "field": "risk_band", "op": "==", "value": "high" }, "outcome": "hold" },
-    { "id": "R05", "code": "SCREENING_HIT_CONFIRMED", "when": { "field": "screening_status", "op": "==", "value": "confirmed_hit" }, "outcome": "block" }
+    {
+      "id": "R01",
+      "code": "LARGE_AMOUNT",
+      "when": {
+        "field": "amount",
+        "op": ">=",
+        "value": 3000
+      },
+      "outcome": "warn"
+    },
+    {
+      "id": "R02",
+      "code": "MODEL_RISK_ELEVATED",
+      "when": {
+        "field": "risk_band",
+        "op": "==",
+        "value": "elevated"
+      },
+      "outcome": "warn"
+    },
+    {
+      "id": "R03",
+      "code": "NEW_PAYEE_LARGE_AMOUNT",
+      "when": {
+        "all": [
+          {
+            "field": "payee_age_days",
+            "op": "<",
+            "value": 1
+          },
+          {
+            "field": "amount",
+            "op": ">=",
+            "value": 3000
+          }
+        ]
+      },
+      "outcome": "hold"
+    },
+    {
+      "id": "R04",
+      "code": "MODEL_RISK_HIGH",
+      "when": {
+        "field": "risk_band",
+        "op": "==",
+        "value": "high"
+      },
+      "outcome": "hold"
+    },
+    {
+      "id": "R05",
+      "code": "SCREENING_HIT_CONFIRMED",
+      "when": {
+        "field": "screening_status",
+        "op": "==",
+        "value": "confirmed_hit"
+      },
+      "outcome": "block"
+    },
+    {
+      "id": "R06",
+      "code": "THIRD_PARTY_INSTRUCTED_NEW_PAYEE",
+      "when": {
+        "all": [
+          {
+            "field": "third_party_instructed",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "payee_age_days",
+            "op": "<",
+            "value": 7
+          }
+        ]
+      },
+      "outcome": "hold"
+    },
+    {
+      "id": "R07",
+      "code": "PRESSURE_OR_SECRECY",
+      "when": {
+        "any": [
+          {
+            "field": "urgency",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "secrecy",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "outcome": "warn"
+    },
+    {
+      "id": "R08",
+      "code": "UNKNOWN_PAYEE_CLAIM",
+      "when": {
+        "all": [
+          {
+            "field": "unknown_payee",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "amount",
+            "op": ">=",
+            "value": 1000
+          }
+        ]
+      },
+      "outcome": "warn"
+    }
   ]
 }
