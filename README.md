@@ -2,7 +2,7 @@
 
 An AI decision platform for payment risk, sanctions screening and fraud investigation, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
 
-**Status: M2 partly done.** Built and tested: the real-data pipeline (M0), the kernel (M1), and trained models (M2): a transaction risk model (LightGBM, PyTorch MLP, logistic regression, calibrated, with a generated report) and a scam-like text model, both served as read-only tools. The kernel (M1): a hash-chained ledger, idempotent and replayable decisions, a deterministic policy engine, a tool gateway with risk tiers, signed capabilities and approvals, and the HTTP API. Not built yet: the model gateway and LLM agents (rest of M2), screening, the simulator, the console (M3 and later).
+**Status: M2 partly done.** Built and tested: the real-data pipeline (M0), the kernel (M1), and trained models (M2): a transaction risk model (LightGBM, PyTorch MLP, logistic regression, calibrated, with a generated report) and a scam-like text model, both served as read-only tools. The kernel (M1): a hash-chained ledger, idempotent and replayable decisions, a deterministic policy engine, a tool gateway with risk tiers, signed capabilities and approvals, and the HTTP API. Also built: the model gateway (redaction, injection screening, validation, retries, budgets, provider fallback chain). Not built yet: the Interviewer and Explainer agents and faithfulness checker (rest of M2), screening, the simulator, the console (M3 and later).
 
 - Master spec: [docs/SPEC.md](docs/SPEC.md)
 - Data register, licences and verification log: [docs/DATA.md](docs/DATA.md)
