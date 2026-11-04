@@ -2,6 +2,7 @@
 import { useConfig } from "@/components/providers";
 import { useApi, type LedgerEntry } from "@/lib/api";
 import { Card, Chip, Empty, ErrorBox, Loading } from "@/components/ui";
+import { LedgerDemo } from "@/components/ledger-demo";
 
 export default function AuditPage() {
   const { cfg } = useConfig();
@@ -15,6 +16,7 @@ export default function AuditPage() {
         {verify.loading ? <Loading what="Checking the chain" /> : verify.error ? <ErrorBox message={verify.error} onRetry={verify.reload} /> : verify.data && (
           verify.data.ok ? <p><Chip kind="good">Chain intact</Chip> {verify.data.checked} entries checked.</p> : <p><Chip kind="high">Chain broken</Chip> {verify.data.reason} (entry {verify.data.bad_seq})</p>)}
       </Card>
+      <LedgerDemo />
       <Card title="Recent entries (oldest first, up to 100)">
         {entries.loading ? <Loading what="Loading entries" /> : entries.error ? <ErrorBox message={entries.error} onRetry={entries.reload} /> : !entries.data || entries.data.length === 0 ? <Empty>Nothing has been recorded yet.</Empty> : (
           <div className="table-wrap"><table><thead><tr><th>#</th><th>What happened</th><th>When</th><th>Details</th><th>Fingerprint</th></tr></thead>

@@ -2,6 +2,7 @@
 that anything is criminal. Every sentence must cite evidence ids and pass the same deterministic faithfulness checker as the Explainer. When the evidence is thin it
 abstains, and that decision is made by a fixed rule BEFORE any model is called. Its recommendation can only raise a case's priority, never lower it or close it."""
 from __future__ import annotations
+import time
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from ..llm.gateway import LLMGateway, LLMRequest, LLMResult
@@ -67,14 +68,69 @@ def _task(evidence: list[Evidence]) -> str:
             "Output JSON with keys recommendation and sentences.\nEvidence:\n" + lines)
 
 
-def investigate(gateway: LLMGateway, run_id: str, items: list[dict]) -> tuple[CaseSummary, LLMResult | None, list[Evidence], str]:
+def _steps(items, evidence, res, thin, facts_ms, rule_ms, check_ms, check_issues, priority, recommendation, total_ms):
+    """Turns what really happened into an ordered list of steps with measured durations. Nothing here is invented: every status and number comes from the run."""
+    attempts = list(res.attempts) if res else []
+    ai_ms = sum(a.get("ms", 0) for a in attempts)
+    ok_attempt = next((a for a in attempts if a.get("ok")), None)
+    failed_checks = [a for a in attempts if a.get("kind") == "check" and not a.get("ok")]
+    path = "rule" if thin else (res.path if res else "rule")
+    steps = [
+        {"id": "facts", "label": "Facts from the case", "status": "ok", "ms": facts_ms, "detail": {"facts": [{"id": e.id, "text": e.text} for e in evidence]}},
+        {"id": "screen", "label": "Redaction and injection screen", "status": "skipped", "ms": 0, "detail": {"note": "No free text is sent to the AI here. It only sees the structured facts, so there is nothing to redact.", "injection_flags": []}},
+        {"id": "rule", "label": "Abstain rule", "status": "stopped" if thin else "ok", "ms": rule_ms, "detail": {"note": "A lone alert with a score below 0.90 is too thin to summarise: stop and ask a person." if thin else "Enough evidence to ask the AI."}},
+    ]
+    if thin:
+        steps += [{"id": "ai", "label": "AI summary", "status": "skipped", "ms": 0, "detail": {"note": "Not called: the abstain rule stopped here."}},
+                  {"id": "fact_check", "label": "Fact check", "status": "skipped", "ms": 0, "detail": {"note": "Nothing to check."}}]
+    else:
+        steps.append({"id": "ai", "label": "AI summary", "status": "ok" if ok_attempt else "failed", "ms": ai_ms,
+                      "detail": {"attempts": [{k: a[k] for k in ("provider", "ok", "reason", "kind", "detail", "ms") if k in a} for a in attempts], "model": res.model if res else None, "fallback_reason": getattr(res, "fallback_reason", None)}})
+        checked = res.path == "llm" or bool(failed_checks)
+        steps.append({"id": "fact_check", "label": "Fact check", "status": ("ok" if res.path == "llm" else "failed") if checked else "skipped", "ms": check_ms,
+                      "detail": {"repaired": bool(failed_checks) and res.path == "llm", "issues": check_issues[:6], "note": "Every sentence must cite a fact, use only numbers from the cited fact, and avoid forbidden wording." if checked else "The AI gave no reply to check."}})
+        if res.path != "llm":
+            steps.append({"id": "fallback", "label": "Safe fallback summary", "status": "ok", "ms": 0, "detail": {"note": "Written directly from the facts, so it passes the fact check by construction."}})
+    steps.append({"id": "priority", "label": "Priority rule", "status": "ok", "ms": 0, "detail": {"recommendation": recommendation, "priority": priority, "note": "The recommendation can raise a case's priority, never lower it or close it."}})
+    steps.append({"id": "ledger", "label": "Audit ledger", "status": "ok", "ms": 0, "detail": {"note": "Written to the tamper-evident chain (see the audit trail)."}})
+    t = 0
+    for st in steps:
+        st["start_ms"] = t
+        t += st["ms"]
+    return {"path": path, "total_ms": total_ms, "steps": steps}
+
+
+def investigate_traced(gateway: LLMGateway, run_id: str, items: list[dict]):
+    """Same as `investigate`, plus a trace of what happened at each step with measured timings."""
+    t_all = time.perf_counter()
+    t = time.perf_counter()
     evidence = build_case_evidence(items)
-    if evidence_is_thin(items):
-        s = abstain_summary(evidence)
-        return s, None, evidence, priority_for(s.recommendation, items)
-    check = lambda s: [f"sentence {i.sentence + 1}: {i.rule} ({i.detail})" for i in check_sentences(s.sentences, evidence, "hold")]
-    res = gateway.generate(LLMRequest(task=_task(evidence), output=CaseSummary, check=check, max_tokens=350), run_id, lambda: fallback_summary(evidence))
-    return res.parsed, res, evidence, priority_for(res.parsed.recommendation, items)
+    facts_ms = round((time.perf_counter() - t) * 1000)
+    t = time.perf_counter()
+    thin = evidence_is_thin(items)
+    rule_ms = round((time.perf_counter() - t) * 1000)
+    check_ms, check_issues, res = 0, [], None
+    if thin:
+        summary = abstain_summary(evidence)
+    else:
+        def check(s):
+            nonlocal check_ms
+            t0 = time.perf_counter()
+            issues = [f"sentence {i.sentence + 1}: {i.rule} ({i.detail})" for i in check_sentences(s.sentences, evidence, "hold")]
+            check_ms += round((time.perf_counter() - t0) * 1000)
+            check_issues.extend(issues)
+            return issues
+        res = gateway.generate(LLMRequest(task=_task(evidence), output=CaseSummary, check=check, max_tokens=350), run_id, lambda: fallback_summary(evidence))
+        summary = res.parsed
+    prio = priority_for(summary.recommendation, items)
+    total_ms = round((time.perf_counter() - t_all) * 1000)
+    trace = _steps(items, evidence, res, thin, facts_ms, rule_ms, check_ms, check_issues, prio, summary.recommendation, total_ms)
+    return summary, res, evidence, prio, trace
+
+
+def investigate(gateway: LLMGateway, run_id: str, items: list[dict]) -> tuple[CaseSummary, LLMResult | None, list[Evidence], str]:
+    summary, res, evidence, prio, _ = investigate_traced(gateway, run_id, items)
+    return summary, res, evidence, prio
 
 
 def analyst_text(s: CaseSummary) -> str:

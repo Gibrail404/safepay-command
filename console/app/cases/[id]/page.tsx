@@ -6,6 +6,7 @@ import { useConfig } from "@/components/providers";
 import { call, useApi, type CaseDetail, type Investigation } from "@/lib/api";
 import { Card, Chip, ErrorBox, Loading, Provenance } from "@/components/ui";
 import { labelOf } from "../page";
+import { RunTrace } from "@/components/trace";
 
 function Sentence({ text, evidence }: { text: string; evidence: Investigation["evidence"] }) {
   const parts = text.split(/(\[E\d+(?:\s*,\s*E\d+)*\])/g);
@@ -29,6 +30,7 @@ function Investigator({ id, inv, onDone }: { id: string; inv: Investigation | nu
         <>
           <p><Chip kind={inv.recommendation === "escalate" ? "high" : inv.recommendation === "review" ? "normal" : "neutral"}>{inv.recommendation === "escalate" ? "Recommends escalating" : inv.recommendation === "review" ? "Recommends a normal review" : "Not enough evidence to recommend"}</Chip> <span className="muted">{how}</span></p>
           {inv.sentences.map((s, i) => <Sentence key={i} text={s} evidence={inv.evidence} />)}
+          {inv.trace && <RunTrace key={inv.trace.total_ms + inv.sentences.join("").length} trace={inv.trace} caseId={id} />}
           <details><summary>Facts behind the summary</summary><ul>{inv.evidence.map((e) => <li key={e.id}><span className="cite">{e.id}</span> {e.text}</li>)}</ul></details>
         </>)}
     </Card>

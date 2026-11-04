@@ -41,7 +41,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const setCfg = (c: Config | null) => { setCfgState(c); try { c ? sessionStorage.setItem(STORAGE_KEY, JSON.stringify(c)) : sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ } };
   if (!ready) return <div className="state" role="status">Loading…</div>;
   if (!cfg) return <Connect onSave={setCfg} />;
-  const nav = [["/cases", "Cases"], ["/reports", "Reports"], ["/audit", "Audit trail"]] as const;
+  const nav = [["/cases", "Cases"], ["/lab", "Decision Lab"], ["/reports", "Reports"], ["/audit", "Audit trail"]] as const;
   return (
     <Ctx.Provider value={{ cfg, setCfg, role, canAct: role !== "viewer" }}>
       <header className="topbar">

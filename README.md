@@ -7,8 +7,12 @@ An AI decision platform for payment risk, sanctions screening and fraud investig
 - Master spec: [docs/SPEC.md](docs/SPEC.md) · Harness design: [docs/HARNESS.md](docs/HARNESS.md) · Data register and licence caveats: [docs/DATA.md](docs/DATA.md)
 - [Threat model](docs/THREAT_MODEL.md) (each threat with its test and its residual risk) · [Model cards](docs/MODEL_CARDS.md) · [Product requirements](docs/PRD.md) · [Deploying](docs/DEPLOY.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Blog draft](docs/BLOG.md)
 
-![Case queue of real alerts](docs/figures/console-queue.png)
-![A case with an AI summary whose sentences cite facts](docs/figures/console-case.png)
+![A 23-second tour: a real case, the replay of its run, tampering with the audit chain, and the policy slider](docs/figures/demo.gif)
+
+| | |
+|---|---|
+| ![Case queue of real alerts](docs/figures/console-queue.png) | ![The run of one AI summary, step by step with real timings](docs/figures/console-case.png) |
+| ![Tampering with a copy of the audit chain, detected in the browser](docs/figures/console-tamper.png) | ![Decision Lab: move the thresholds, see the trade-off](docs/figures/console-lab.png) |
 
 ## What is in it
 
@@ -21,7 +25,7 @@ An AI decision platform for payment risk, sanctions screening and fraud investig
 | Decision Lab | Simulator with known truth, counterfactual estimators checked against it, uplift, simulation API | `docs/reports/decision_lab.md`, `uplift.md` (simulated) |
 | Graph and cases | Real Elliptic transaction graph: does structure help, how alerts group into cases | `docs/reports/graph.md` (real data) |
 | Flywheel | How the way analysts' labels are collected changes what the model learns | `docs/reports/flywheel.md` (real transactions, simulated analysts) |
-| Console | Next.js analyst console that renders only what the API returns: case queue, investigation summary with citations, decisions, reports, audit trail; read-only roles supported | 8 Playwright browser tests (`cd console && npm run e2e`) |
+| Console | Next.js analyst console that renders only what the API returns: case queue; investigation summary with citations; a **run replay** that animates the real recorded steps (facts, redaction, abstain rule, AI call, fact check, fallback, priority, ledger) with real timings; an audit trail where **your browser re-computes every hash** and lets you try to tamper with a copy; a **Decision Lab** with live simulated policy sliders; reports; read-only roles | 12 Playwright browser tests (`cd console && npm run e2e`) |
 | Security and operations | Roles per API key, per-key rate limit, request-size limits, AI spending caps kept in the database, name and address redaction | `docs/THREAT_MODEL.md`, `reports/redaction.md`, `reports/load.md` |
 
 Honest headline findings: simple neighbour features add almost nothing on the real graph while the model collapses after a known market shutdown (drift); corrected counterfactual estimators are close to unbiased but their intervals still under-cover; name folding did not help screening; coached victims evade question-based checks. See each report's limits section.

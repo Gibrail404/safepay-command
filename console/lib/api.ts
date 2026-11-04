@@ -54,9 +54,14 @@ export function useApi<T>(cfg: Config | null, path: string | null) {
 
 export type Item = { ref: string; score: number; time_step: number | null; facts: { neighbours?: number; linked_alerts?: number } };
 export type CaseRow = { id: string; title: string; status: "open" | "dispositioned"; priority: "high" | "normal"; source: string; provenance: "real" | "simulated"; has_investigation: boolean; alerts: number; max_score: number; disposition?: { decision: string; actor: string; note: string; ts: string } };
-export type Investigation = { recommendation: "escalate" | "review" | "abstain"; sentences: string[]; priority: string; path: "llm" | "rule" | "fallback"; provider: string | null; model: string | null; evidence: { id: string; text: string }[]; injection_flags: string[] };
+export type Investigation = { trace?: Trace; recommendation: "escalate" | "review" | "abstain"; sentences: string[]; priority: string; path: "llm" | "rule" | "fallback"; provider: string | null; model: string | null; evidence: { id: string; text: string }[]; injection_flags: string[] };
 export type CaseDetail = CaseRow & { items: Item[]; facts: Record<string, unknown>; investigation: Investigation | null; revealed_truth?: Record<string, number> };
 export type Stats = { open: number; dispositioned: number; open_high_priority: number; labels: number };
 export type ReportInfo = { name: string; title: string; provenance: "real" | "simulated" | "mixed"; available: boolean };
 export type Report = ReportInfo & { markdown: string };
-export type LedgerEntry = { seq: number; kind: string; ts: string; hash: string; prev_hash: string; payload: Record<string, unknown> };
+export type LedgerEntry = { seq: number; tenant: string; kind: string; ts: string; hash: string; prev_hash: string; payload: Record<string, unknown>; payload_canonical: string };
+export type TraceStep = { id: string; label: string; status: "ok" | "skipped" | "failed" | "stopped"; ms: number; start_ms: number; detail: Record<string, any> };
+export type Trace = { path: "llm" | "fallback" | "rule"; total_ms: number; steps: TraceStep[] };
+export type FrontierRow = { hold_from: number; warn_from: number; scam_money_stopped_share: number; good_payments_warned_share: number; good_payments_held_share: number; value_per_payment: number };
+export type Frontier = { provenance: "simulated"; note: string; assumptions: Record<string, unknown>; rows: FrontierRow[] };
+export type SimResult = { provenance: "simulated"; note: string; assumptions: Record<string, unknown>; n: number; result: FrontierRow };

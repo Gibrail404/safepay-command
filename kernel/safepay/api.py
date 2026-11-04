@@ -9,11 +9,11 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from . import cases as case_svc, ledger
-from .agents.investigator import investigate
+from .agents.investigator import investigate_traced
 from .llm.budget_db import DbBudget
 from .llm.gateway import LLMGateway
 from .config import ROLE_RANK, PolicyStore, Settings
-from .db import DecisionRow, EventRow, init_db, make_engine
+from .db import DecisionRow, EventRow, LedgerEntry, LedgerHead, init_db, make_engine
 from .decisions import DecisionRequest, DecisionResponse, DecisionService, IdempotencyConflict, NotFound, PolicyIntegrityError, ReplayResult
 from .policy import Policy, evaluate
 from .tools import CallResult, ToolGateway, ToolRegistry, mint_capability
@@ -208,13 +208,15 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     @app.get("/v1/audit")
     def audit(tenant: str = Depends(tenant_of), after_seq: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500)):
         with sf() as s:
-            return [{"seq": e.seq, "kind": e.kind, "ts": e.ts, "hash": e.hash, "prev_hash": e.prev_hash, "payload": json.loads(e.payload)} for e in ledger.entries(s, tenant, after_seq, limit)]
+            return [{"seq": e.seq, "tenant": e.tenant, "kind": e.kind, "ts": e.ts, "hash": e.hash, "prev_hash": e.prev_hash, "payload": json.loads(e.payload), "payload_canonical": e.payload}
+                    for e in ledger.entries(s, tenant, after_seq, limit)]      # payload_canonical is the exact string that was hashed, so a client can recompute the hash itself
 
     @app.get("/v1/audit/verify")
     def audit_verify(tenant: str = Depends(tenant_of)):
         with sf() as s:
             r = ledger.verify(s, tenant)
-        return {"ok": r.ok, "checked": r.checked, "reason": r.reason, "bad_seq": r.bad_seq}
+            head = s.get(LedgerHead, tenant)
+        return {"ok": r.ok, "checked": r.checked, "reason": r.reason, "bad_seq": r.bad_seq, "head_hash": head.head_hash if head else ledger.GENESIS}
 
     @app.get("/v1/policies")
     def list_policies(tenant: str = Depends(tenant_of)):
@@ -262,6 +264,18 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         except case_svc.NotFound:
             raise HTTPException(404, "case not found")
 
+    @app.get("/v1/cases/{case_id}/ledger")
+    def case_ledger(case_id: str, tenant: str = Depends(tenant_of)):
+        """The ledger entries about one case (investigation and decision), for the case's trace view."""
+        try:
+            with sf() as s:
+                case_svc.case_content(s, tenant, case_id)           # 404 for another tenant's case
+                rows = s.scalars(select(LedgerEntry).where(LedgerEntry.tenant == tenant, LedgerEntry.kind.in_(("case.investigated", "case.dispositioned")),
+                                                          LedgerEntry.payload.contains(f'"case_id":"{case_id}"')).order_by(LedgerEntry.seq)).all()
+                return [{"seq": e.seq, "kind": e.kind, "ts": e.ts, "hash": e.hash} for e in rows]
+        except case_svc.NotFound:
+            raise HTTPException(404, "case not found")
+
     @app.post("/v1/cases/{case_id}/investigate")
     def investigate_case(case_id: str, tenant: str = Depends(analyst_of)):
         try:
@@ -269,9 +283,9 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
                 items = case_svc.case_content(s, tenant, case_id)["items"]
         except case_svc.NotFound:
             raise HTTPException(404, "case not found")
-        summary, res, evidence, priority = investigate(llm, f"inv-{case_id}", items)
+        summary, res, evidence, priority, trace = investigate_traced(llm, f"inv-{case_id}", items)
         meta = {"path": res.path if res else "rule", "provider": res.provider if res else None, "model": res.model if res else None,
-                "evidence": [{"id": e.id, "text": e.text} for e in evidence], "injection_flags": res.injection_flags if res else []}
+                "evidence": [{"id": e.id, "text": e.text} for e in evidence], "injection_flags": res.injection_flags if res else [], "trace": trace}
         with sf.begin() as s:
             case_svc.save_investigation(s, tenant, case_id, {**summary.model_dump(), "priority": priority}, meta)
         return {**summary.model_dump(), "priority": priority, **meta}
@@ -292,6 +306,24 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     def labels(tenant: str = Depends(tenant_of), limit: int = Query(200, ge=1, le=1000), offset: int = Query(0, ge=0)):
         with sf() as s:
             return case_svc.export_labels(s, tenant, limit, offset)
+
+    frontier_cache: dict = {}
+
+    @app.get("/v1/simulations/frontier")
+    def simulation_frontier(tenant: str = Depends(tenant_of), n: int = Query(100_000, ge=10_000, le=300_000), seed: int = Query(0, ge=0, le=10**9)):
+        """Reference curve for the policy slider: a family of threshold policies on simulated payments, each with its true outcome. Cached per (n, seed)."""
+        try:
+            from dataclasses import asdict
+            from safepay_lab.experiments import frontier
+            from safepay_lab.simulator import SimConfig
+        except ImportError:
+            raise HTTPException(501, "the simulation package is not installed on this server")
+        key = (n, seed)
+        if key not in frontier_cache:
+            if len(frontier_cache) > 8:
+                frontier_cache.clear()
+            frontier_cache[key] = frontier(SimConfig(), n=n, seed=seed)
+        return {"provenance": "simulated", "note": "Simulated payments with assumed scam behaviour; amounts follow the real ULB card data. Not evidence about real customers.", "assumptions": asdict(SimConfig()), "n": n, "seed": seed, "rows": frontier_cache[key]}
 
     # ---------------- generated reports (the UI's metrics pages read these) ----------------
     reports_dir = Path(__file__).resolve().parents[2] / "docs" / "reports"

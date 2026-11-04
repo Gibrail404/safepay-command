@@ -1357,6 +1357,60 @@
         "summary": "Investigate Case"
       }
     },
+    "/v1/cases/{case_id}/ledger": {
+      "get": {
+        "description": "The ledger entries about one case (investigation and decision), for the case's trace view.",
+        "operationId": "case_ledger_v1_cases__case_id__ledger_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Case Ledger"
+      }
+    },
     "/v1/decisions": {
       "post": {
         "operationId": "post_decision_v1_decisions_post",
@@ -1979,6 +2033,75 @@
           }
         },
         "summary": "Simulate Policy"
+      }
+    },
+    "/v1/simulations/frontier": {
+      "get": {
+        "description": "Reference curve for the policy slider: a family of threshold policies on simulated payments, each with its true outcome. Cached per (n, seed).",
+        "operationId": "simulation_frontier_v1_simulations_frontier_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "n",
+            "required": false,
+            "schema": {
+              "default": 100000,
+              "maximum": 300000,
+              "minimum": 10000,
+              "title": "N",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seed",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000000,
+              "minimum": 0,
+              "title": "Seed",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Simulation Frontier"
       }
     },
     "/v1/tools": {
