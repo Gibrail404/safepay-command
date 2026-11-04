@@ -14,6 +14,8 @@ class Settings:
     tenants: dict[str, str] = field(default_factory=dict)         # api key -> tenant id
     capability_secret: bytes = field(default_factory=lambda: secrets.token_bytes(32))
     policy_dir: Path = ROOT / "config" / "policies"
+    ollama_api_key: str = ""
+    cors_origins: tuple = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -21,7 +23,8 @@ class Settings:
         secret = os.environ.get("SAFEPAY_CAPABILITY_SECRET")
         return cls(database_url=os.environ.get("DATABASE_URL", cls.database_url), tenants={k: t for t, k in pairs},
                    capability_secret=secret.encode() if secret else secrets.token_bytes(32),
-                   policy_dir=Path(os.environ.get("SAFEPAY_POLICY_DIR", ROOT / "config" / "policies")))
+                   policy_dir=Path(os.environ.get("SAFEPAY_POLICY_DIR", ROOT / "config" / "policies")), ollama_api_key=os.environ.get("OLLAMA_API_KEY", ""),
+                   cors_origins=tuple(o for o in os.environ.get("SAFEPAY_CORS_ORIGINS", "").split(",") if o))
 
 
 class PolicyStore:

@@ -156,3 +156,12 @@ def test_simulation_endpoint_rejects_bad_input_and_needs_a_key(client):
     assert client.post("/v1/simulations", json={"warn_from": 0, "hold_from": 1, "n": 10**9}, headers=A).status_code == 422
     assert client.post("/v1/simulations", json={"warn_from": 0, "hold_from": 1}).status_code == 401
     assert client.post("/v1/simulations", json={"warn_from": 0, "hold_from": 1, "n": 5000}, headers=B).status_code == 200
+
+
+def test_reports_are_listed_with_provenance_and_unknown_names_are_refused(client):
+    names = {r["name"]: r for r in client.get("/v1/reports", headers=A).json()}
+    assert names["decision_lab"]["provenance"] == "simulated" and names["screening"]["provenance"] == "real"
+    assert client.get("/v1/reports/../../README", headers=A).status_code == 404 and client.get("/v1/reports/nope", headers=A).status_code == 404
+    assert client.get("/v1/reports/graph").status_code == 401
+    if names["graph"]["available"]:
+        assert "Graph evaluation" in client.get("/v1/reports/graph", headers=A).json()["markdown"]

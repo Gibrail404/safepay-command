@@ -1,0 +1,59 @@
+{
+  "model": "gemma4:31b",
+  "cases": 60,
+  "abstained_by_rule": {
+    "k": 11,
+    "n": 60,
+    "rate": 0.18333333333333332,
+    "ci95": [
+      0.1055768903713613,
+      0.29919993226466285
+    ]
+  },
+  "sent_to_model": 49,
+  "first_answer_right_format": {
+    "k": 49,
+    "n": 49,
+    "rate": 1.0,
+    "ci95": [
+      0.9272997032640949,
+      0.9999999999999999
+    ]
+  },
+  "first_answer_passed_fact_check": {
+    "k": 49,
+    "n": 49,
+    "rate": 1.0,
+    "ci95": [
+      0.9272997032640949,
+      0.9999999999999999
+    ]
+  },
+  "unsupported_sentences_in_first_answers": {
+    "k": 0,
+    "n": 85,
+    "rate": 0.0,
+    "ci95": [
+      0.0,
+      0.04324100421424198
+    ]
+  },
+  "final_answer_from_model": {
+    "k": 49,
+    "n": 49,
+    "rate": 1.0,
+    "ci95": [
+      0.9272997032640949,
+      0.9999999999999999
+    ]
+  },
+  "recommendations": {
+    "escalate": 42,
+    "review": 7,
+    "abstain": 11
+  },
+  "latency_ms": {
+    "p50": 1690.822249998746,
+    "p95": 1928.1586338016493
+  }
+}

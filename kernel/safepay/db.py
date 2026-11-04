@@ -79,6 +79,47 @@ class ApprovalRow(Base):
     decided_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class CaseRow(Base):
+    """An investigation case: one or more linked alerts. `content` is what analysts see; `truth` is the dataset's own label, hidden until a disposition exists."""
+    __tablename__ = "cases"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    external_id: Mapped[str] = mapped_column(String(128))
+    source: Mapped[str] = mapped_column(String(64))
+    provenance: Mapped[str] = mapped_column(String(16))          # real | simulated
+    status: Mapped[str] = mapped_column(String(16), index=True)  # open | dispositioned
+    priority: Mapped[str] = mapped_column(String(8))             # high | normal
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    truth: Mapped[str | None] = mapped_column(Text, nullable=True)
+    investigation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    __table_args__ = (UniqueConstraint("tenant", "external_id", name="uq_case_external"),)
+
+
+class DispositionRow(Base):
+    __tablename__ = "dispositions"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    case_id: Mapped[str] = mapped_column(String(40), unique=True)       # one disposition per case
+    actor: Mapped[str] = mapped_column(String(64))
+    decision: Mapped[str] = mapped_column(String(24))
+    note: Mapped[str] = mapped_column(String(500))
+    ts: Mapped[str] = mapped_column(String(40))
+
+
+class LabelRow(Base):
+    """Labels produced by analyst decisions, with provenance, ready for retraining. A label says who produced it and whether the analyst was a person or simulated."""
+    __tablename__ = "labels"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    case_id: Mapped[str] = mapped_column(String(40), index=True)
+    subject_ref: Mapped[str] = mapped_column(String(64))
+    label: Mapped[int] = mapped_column(Integer)
+    actor: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(24))                     # analyst | simulated_analyst
+    ts: Mapped[str] = mapped_column(String(40))
+
+
 def make_engine(url: str = "sqlite+pysqlite:///:memory:"):
     if url.startswith("sqlite") and ":memory:" in url:
         return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)

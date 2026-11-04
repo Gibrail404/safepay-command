@@ -8,3 +8,6 @@ data/processed/
 node_modules/
 .next/
 models/
+.claude/
+console/node_modules
+console/.next

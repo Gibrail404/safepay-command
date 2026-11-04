@@ -81,3 +81,16 @@ def test_gateway_caps_the_customer_text_sent_to_a_provider():
     p = FakeProvider([OK])
     ask(gw(p), "word " * 100_000)
     assert len(p.seen[0]["user"]) < 5000
+
+
+@pytest.mark.skipif(not TEST_DB_URL.startswith("postgresql"), reason="needs PostgreSQL")
+def test_one_approval_authorises_only_one_execution_under_a_race():
+    c, _ = build_client()
+    run = c.post("/v1/runs", json={"tools": ["release_payment"]}, headers=A).json()
+    call = lambda key: c.post("/v1/tools/call", json={"tool": "release_payment", "args": {"payment_id": "p7"}}, headers={**A, "X-Capability": run["capability"], "Idempotency-Key": key})
+    first = call("first").json()
+    assert first["status"] == "approval_required"
+    c.post(f"/v1/approvals/{first['approval_id']}/decision", json={"approve": True}, headers={**A, "X-Actor": "analyst"})
+    with ThreadPoolExecutor(8) as ex:
+        out = [r.json()["status"] for r in ex.map(lambda i: call(f"race-{i}"), range(8))]
+    assert out.count("executed") == 1

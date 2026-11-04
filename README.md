@@ -2,57 +2,75 @@
 
 An AI decision platform for payment risk, sanctions screening and fraud investigation, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
 
-**Status: M2 partly done.** Built and tested: the real-data pipeline (M0), the kernel (M1), and trained models (M2): a transaction risk model (LightGBM, PyTorch MLP, logistic regression, calibrated, with a generated report) and a scam-like text model, both served as read-only tools. The kernel (M1): a hash-chained ledger, idempotent and replayable decisions, a deterministic policy engine, a tool gateway with risk tiers, signed capabilities and approvals, and the HTTP API. Also built: the model gateway (redaction, injection screening, validation, retries, budgets, provider fallback chain), the Questioner and Explainer agents with a deterministic faithfulness checker, and a generated provider evaluation (`docs/reports/llm_eval.md`). Not built yet: screening, the simulator, the console (M3 and later).
+**Status: milestones M0 to M5 built and tested; M6 (hardening, deployment, end-to-end tests, load numbers) is next.** Every number below comes from a generated report in `docs/reports/`, each of which states whether its data is real or simulated.
 
-- Master spec: [docs/SPEC.md](docs/SPEC.md)
-- Data register, licences and verification log: [docs/DATA.md](docs/DATA.md)
+- Master spec: [docs/SPEC.md](docs/SPEC.md) · Harness design: [docs/HARNESS.md](docs/HARNESS.md) · Data register and licence caveats: [docs/DATA.md](docs/DATA.md)
+
+## What is in it
+
+| Part | What it does | Evidence |
+|---|---|---|
+| Kernel | Hash-chained tamper-evident ledger, idempotent and replayable decisions, deterministic policy engine, tool gateway with risk tiers, signed capabilities and one-use approvals | tests, including race tests on PostgreSQL |
+| Risk and scam-text models | Calibrated transaction-risk model (LightGBM, PyTorch MLP, logistic regression) and a scam-like text model | `docs/reports/risk_model.md`, `text_model.md` (real data) |
+| LLM steps | Model gateway (redaction, injection screening, validation, budgets, provider fallback), Questioner, Explainer and Investigator agents, deterministic faithfulness checker | `docs/reports/llm_eval.md`, `sandbox.md` |
+| Screening | OFAC name matching with a policy and an adjudicator that can explain but never clear a hit | `docs/reports/screening.md` (real data) |
+| Decision Lab | Simulator with known truth, counterfactual estimators checked against it, uplift, simulation API | `docs/reports/decision_lab.md`, `uplift.md` (simulated) |
+| Graph and cases | Real Elliptic transaction graph: does structure help, how alerts group into cases | `docs/reports/graph.md` (real data) |
+| Flywheel | How the way analysts' labels are collected changes what the model learns | `docs/reports/flywheel.md` (real transactions, simulated analysts) |
+| Console | Next.js analyst console that renders only what the API returns: case queue, investigation summary with citations, decisions, reports, audit trail | run it below |
+
+Honest headline findings: simple neighbour features add almost nothing on the real graph while the model collapses after a known market shutdown (drift); corrected counterfactual estimators are close to unbiased but their intervals still under-cover; name folding did not help screening; coached victims evade question-based checks. See each report's limits section.
 
 ## Principles
 
-1. Real data wherever a public dataset exists. Where none exists (scam conversations), a simulator is used and everything it produces is labelled "simulated".
-2. No hand-written product data. Raw files are downloaded by script and verified against a checksum; processed data and its manifest are generated.
-3. Every metric is reported with its data source and, once evaluation exists, with confidence intervals.
+1. Real data wherever a public dataset exists. Where none exists (scam conversations, analyst behaviour) a simulator or simulated actor is used and everything it produces is labelled "simulated".
+2. No hand-written product data. Raw files are downloaded by script and verified against a checksum; processed data and manifests are generated. The console renders only API responses.
+3. Every metric is reported with its data source, and where possible with confidence intervals. Negative results are kept.
+4. The LLM assists, it never decides. A deterministic policy engine owns outcomes, and LLM output can only add friction.
 
 ## Quickstart
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install pandas numpy scipy pyarrow pyyaml pytest
-cd pipelines && python -m safepay_data all    # downloads and validates the real datasets (about 150 MB)
-cd .. && python -m pytest -q                         # unit tests plus tests on the real data
+pip install pandas numpy scipy pyarrow pyyaml pytest fastapi uvicorn httpx pydantic sqlalchemy "psycopg[binary]" hypothesis scikit-learn lightgbm torch rapidfuzz matplotlib
+cd pipelines && python -m safepay_data all    # downloads and validates the real datasets (about 300 MB)
+cd .. && python -m pytest -q                  # SQLite by default; set SAFEPAY_TEST_DATABASE_URL for PostgreSQL
 ```
+macOS: LightGBM needs `brew install libomp`, and LightGBM and PyTorch must never share one process (see `ml/safepay_ml/__init__.py`).
 
-## Run the kernel
+## Run the API and the console
 
 ```bash
 docker compose up -d db                                   # PostgreSQL 16 on localhost:5433 (development password, localhost only)
-export DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@127.0.0.1:5433/safepay_test
-export SAFEPAY_TENANTS="demo:replace-with-your-own-key"   # tenant:key pairs
-PYTHONPATH=kernel:ml:screening uvicorn --factory safepay.api:create_app --port 8000
-# tests: SQLite by default, PostgreSQL (including the concurrency tests) with:
-SAFEPAY_TEST_DATABASE_URL=$DATABASE_URL python -m pytest tests/kernel -q
+docker compose exec db psql -U safepay -d postgres -c "CREATE DATABASE safepay"      # once
+cp .env.example .env   # optional: OLLAMA_API_KEY enables the AI summaries; without it a safe plain summary is used
+bash scripts/dev_server.sh                                # API on :8000, demo key "demo-key" (see the script)
+python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key    # real Elliptic alerts become cases
+cd console && npm install && npm run dev                  # console on :3000, then connect with the address, key and your name
 ```
-The API contract is generated from the code into `docs/openapi.json` (`python scripts/export_openapi.py`). Policies are version-controlled rules in `config/policies/`.
+Tests: `SAFEPAY_TEST_DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@127.0.0.1:5433/safepay_test python -m pytest tests -q` also runs the PostgreSQL-only concurrency tests. The API contract is generated into `docs/openapi.json` (`python scripts/export_openapi.py`).
 
-## Train the models (real data)
+## Regenerate the reports
 
 ```bash
-cd pipelines && python -m safepay_data all && cd ../ml
-python -m safepay_ml.train_risk     # writes models/risk/ and docs/reports/risk_model.md (about 20 s)
-python -m safepay_ml.train_text     # writes models/text_scam/ and docs/reports/text_model.md (about 1 s)
+cd ml && python -m safepay_ml.train_risk && python -m safepay_ml.train_text && cd ..
+python scripts/eval_screening.py && python scripts/eval_graph.py && python scripts/eval_flywheel.py
+python scripts/eval_lab.py && python scripts/eval_uplift.py           # simulated
+python scripts/eval_llm.py && python scripts/eval_sandbox.py          # need OLLAMA_API_KEY (and optionally GEMINI_API_KEY)
 ```
-macOS note: LightGBM needs `brew install libomp`, and LightGBM and PyTorch must never share one process (see `ml/safepay_ml/__init__.py`).
 
-## Data in v0.1 (all downloaded and validated, see docs/DATA.md for licence caveats)
+## Data (all downloaded by script, see docs/DATA.md for licence caveats)
 
 | Dataset | Rows | Role |
 |---|---|---|
-| ULB credit card fraud (real, anonymised) | 284,807 (492 fraud) | transaction-risk model |
+| ULB credit card fraud (real, anonymised) | 284,807 (492 fraud) | transaction-risk model; amount distribution for the simulator |
 | UCI SMS Spam Collection (CC BY 4.0) | 5,574 | scam-like text classifier |
-| OFAC SDN list (official) | 19,485 | payee and name screening |
+| OFAC SDN list and alias list (official) | 19,485 entries, 20,204 aliases | name screening |
+| US Census names (official) | 162,254 surnames, 5,494 first names | non-sanctioned names for screening false-alert rates |
+| Elliptic Bitcoin graph (real) | 203,769 nodes, 234,355 edges | graph, cases and the flywheel |
 
-Citations: Dal Pozzolo, Caelen, Johnson, Bontempi (IEEE CIDM 2015) for the ULB data; Almeida and Hidalgo (2011), UCI, doi:10.24432/C5CC84 for SMS Spam.
+The licence terms of the OFAC, ULB and Elliptic data are not confirmed; the repository contains no raw data, only scripts that download it. Citations: Dal Pozzolo, Caelen, Johnson, Bontempi (IEEE CIDM 2015) for ULB; Almeida and Hidalgo (2011), doi:10.24432/C5CC84 for SMS Spam; Weber et al. (2019) for Elliptic.
 
-## Roadmap
+## Known gaps
 
-v1 risk model, text classifier, screening, interception flow, analyst workbench, faithfulness evals. v2 simulator and counterfactual estimators. v3 graph-based ring detection and conformal abstention. See the spec for exit criteria.
+Names and addresses are not redacted before LLM calls (needs entity recognition); injection screening is heuristic; budget counters are in memory; one API key per tenant and no roles; tool handlers run inside the database transaction. Planned for M6 together with deployment and end-to-end tests.

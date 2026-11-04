@@ -1,13 +1,16 @@
 """HTTP API (v1). Tenant comes from the API key, never from a client-supplied field."""
 from __future__ import annotations
 import hmac, json, re, uuid
+from pathlib import Path
 from typing import Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from . import ledger
+from . import cases as case_svc, ledger
+from .agents.investigator import investigate
+from .llm.gateway import Budget, LLMGateway
 from .config import PolicyStore, Settings
 from .db import DecisionRow, EventRow, init_db, make_engine
 from .decisions import DecisionRequest, DecisionResponse, DecisionService, IdempotencyConflict, NotFound, PolicyIntegrityError, ReplayResult
@@ -69,7 +72,7 @@ class SimulateIn(BaseModel):
     contexts: list[dict] = Field(max_length=500)
 
 
-def create_app(settings: Settings | None = None, registry: ToolRegistry | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, registry: ToolRegistry | None = None, llm: LLMGateway | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     engine = make_engine(settings.database_url)
     sf = init_db(engine)
@@ -84,7 +87,14 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         pass
     decisions = DecisionService(sf, store.for_workload)
     gateway = ToolGateway(sf, registry, settings.capability_secret)
-    app = FastAPI(title="SafePay Command kernel", version="0.2.0")
+    app = FastAPI(title="SafePay Command kernel", version="0.3.0")
+    if settings.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+        app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST"], allow_headers=["X-API-Key", "X-Actor", "Idempotency-Key", "Content-Type", "X-Capability"])
+    if llm is None:
+        from .llm.providers import OllamaCloudProvider
+        chain = [OllamaCloudProvider(settings.ollama_api_key, m) for m in ("gemma4:31b", "deepseek-v4.1-flash")] if settings.ollama_api_key else []
+        llm = LLMGateway(chain, budget=Budget(max_requests_per_day=400, max_tokens_per_day=400_000, max_requests_per_run=6), timeout_s=12.0, deadline_s=24.0)
 
     @app.middleware("http")
     async def limit_body(request, call_next):
@@ -190,6 +200,77 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         cfg = replace(SimConfig(), scam_rate=body.scam_rate)
         return {"provenance": "simulated", "note": "Simulated payments with assumed scam behaviour; amounts follow the real ULB card data. Not evidence about real customers.",
                 "assumptions": asdict(cfg), "n": body.n, "seed": body.seed, "result": policy_truth(sample_population(body.n, body.seed, cfg), cfg, body.warn_from, body.hold_from)}
+
+    # ---------------- cases, investigation, dispositions, labels ----------------
+    @app.post("/v1/cases/import")
+    def import_cases(body: case_svc.ImportIn, tenant: str = Depends(tenant_of)):
+        with sf.begin() as s:
+            return case_svc.import_cases(s, tenant, body)
+
+    @app.get("/v1/cases")
+    def list_cases(tenant: str = Depends(tenant_of), status: str | None = Query(None, pattern="^(open|dispositioned)$"), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+        with sf() as s:
+            return case_svc.list_cases(s, tenant, status, limit, offset)
+
+    @app.get("/v1/cases/stats")
+    def case_stats(tenant: str = Depends(tenant_of)):
+        with sf() as s:
+            return case_svc.stats(s, tenant)
+
+    @app.get("/v1/cases/{case_id}")
+    def get_case(case_id: str, tenant: str = Depends(tenant_of)):
+        try:
+            with sf() as s:
+                return case_svc.get_case(s, tenant, case_id)
+        except case_svc.NotFound:
+            raise HTTPException(404, "case not found")
+
+    @app.post("/v1/cases/{case_id}/investigate")
+    def investigate_case(case_id: str, tenant: str = Depends(tenant_of)):
+        try:
+            with sf() as s:
+                items = case_svc.case_content(s, tenant, case_id)["items"]
+        except case_svc.NotFound:
+            raise HTTPException(404, "case not found")
+        summary, res, evidence, priority = investigate(llm, f"inv-{case_id}", items)
+        meta = {"path": res.path if res else "rule", "provider": res.provider if res else None, "model": res.model if res else None,
+                "evidence": [{"id": e.id, "text": e.text} for e in evidence], "injection_flags": res.injection_flags if res else []}
+        with sf.begin() as s:
+            case_svc.save_investigation(s, tenant, case_id, {**summary.model_dump(), "priority": priority}, meta)
+        return {**summary.model_dump(), "priority": priority, **meta}
+
+    @app.post("/v1/cases/{case_id}/disposition")
+    def disposition_case(case_id: str, body: case_svc.DispositionIn, tenant: str = Depends(tenant_of), x_actor: str | None = Header(default=None)):
+        if not x_actor or len(x_actor) > 64:
+            raise HTTPException(400, "X-Actor header is required to record who decided (max 64 characters)")
+        try:
+            with sf.begin() as s:
+                return case_svc.disposition(s, tenant, case_id, x_actor, body)
+        except case_svc.NotFound:
+            raise HTTPException(404, "case not found")
+        except (case_svc.AlreadyDecided, IntegrityError):
+            raise HTTPException(409, "this case already has a disposition")
+
+    @app.get("/v1/labels")
+    def labels(tenant: str = Depends(tenant_of), limit: int = Query(200, ge=1, le=1000), offset: int = Query(0, ge=0)):
+        with sf() as s:
+            return case_svc.export_labels(s, tenant, limit, offset)
+
+    # ---------------- generated reports (the UI's metrics pages read these) ----------------
+    reports_dir = Path(__file__).resolve().parents[2] / "docs" / "reports"
+    REPORTS = {"risk_model": ("Transaction risk model", "real"), "text_model": ("Scam-text model", "real"), "screening": ("Name screening", "real"), "graph": ("Graph and cases", "real"), "flywheel": ("Analyst feedback flywheel", "mixed"), "investigator": ("Investigator summaries", "mixed"),
+               "decision_lab": ("Decision Lab", "simulated"), "uplift": ("Uplift", "simulated"), "sandbox": ("Questioner under pressure", "simulated"), "llm_eval": ("LLM provider evaluation", "mixed")}
+
+    @app.get("/v1/reports")
+    def list_reports(tenant: str = Depends(tenant_of)):
+        return [{"name": n, "title": t, "provenance": p, "available": (reports_dir / f"{n}.md").exists()} for n, (t, p) in REPORTS.items()]
+
+    @app.get("/v1/reports/{name}")
+    def get_report(name: str, tenant: str = Depends(tenant_of)):
+        if name not in REPORTS or not (reports_dir / f"{name}.md").exists():
+            raise HTTPException(404, "report not found")
+        t, p = REPORTS[name]
+        return {"name": name, "title": t, "provenance": p, "markdown": (reports_dir / f"{name}.md").read_text()}
 
     @app.get("/v1/tools")
     def list_tools(tenant: str = Depends(tenant_of)):

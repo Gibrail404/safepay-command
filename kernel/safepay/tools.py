@@ -5,7 +5,7 @@ import base64, hashlib, hmac, json, time, uuid
 from dataclasses import dataclass
 from typing import Callable, Literal
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from . import ledger
@@ -134,11 +134,15 @@ class ToolGateway:
             except IntegrityError:
                 s.rollback()
                 return CallResult(status="denied", reason="a call with this idempotency key is already running")
+            if approval is not None:
+                # An approval covers exactly one execution: claim it atomically BEFORE acting, so two simultaneous calls cannot both use it.
+                used = s.execute(update(ApprovalRow).where(ApprovalRow.id == approval.id, ApprovalRow.status == "approved").values(status="used")).rowcount
+                if used != 1:
+                    s.rollback()
+                    return CallResult(status="denied", reason="the approval was already used")
             result = tool.handler(parsed)
             row = s.scalar(select(ToolCallRow).where(ToolCallRow.tenant == tenant, ToolCallRow.tool == tool_name, ToolCallRow.idempotency_key == idempotency_key))
             row.result = ledger.canonical_json(result)
-            if approval is not None:
-                approval.status = "used"                           # an approval covers exactly one execution
             self._log(s, tenant, "tool.executed", {"tool": tool_name, "tier": tool.tier, "run": cap["run"], "args_hash": args_hash,
                                                    "result_hash": ledger.sha256_hex(row.result), "approval_id": approval.id if approval else None})
             return CallResult(status="executed", result=result)
@@ -156,10 +160,12 @@ class ToolGateway:
             return [{"id": a.id, "tool": a.tool, "status": a.status, "decided_by": a.decided_by} for a in s.scalars(q)]
 
     def decide_approval(self, tenant: str, approval_id: str, approver: str, approve: bool) -> dict:
+        new = "approved" if approve else "rejected"
         with self.sf.begin() as s:
-            a = s.scalar(select(ApprovalRow).where(ApprovalRow.tenant == tenant, ApprovalRow.id == approval_id, ApprovalRow.status == "pending"))
-            if a is None:
+            # One conditional UPDATE decides the race: of several simultaneous deciders exactly one changes a row that is still pending.
+            won = s.execute(update(ApprovalRow).where(ApprovalRow.tenant == tenant, ApprovalRow.id == approval_id, ApprovalRow.status == "pending").values(status=new, decided_by=approver)).rowcount
+            if won != 1:
                 raise KeyError(approval_id)
-            a.status, a.decided_by = ("approved" if approve else "rejected"), approver
-            self._log(s, tenant, "approval.decided", {"approval_id": a.id, "tool": a.tool, "status": a.status, "decided_by": approver})
-            return {"id": a.id, "status": a.status}
+            tool = s.scalar(select(ApprovalRow.tool).where(ApprovalRow.id == approval_id))
+            self._log(s, tenant, "approval.decided", {"approval_id": approval_id, "tool": tool, "status": new, "decided_by": approver})
+            return {"id": approval_id, "status": new}
