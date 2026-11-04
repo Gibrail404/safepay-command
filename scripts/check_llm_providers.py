@@ -1,6 +1,6 @@
 """Checks which LLM providers work with the keys in .env and whether they return JSON that matches a schema.
 It prints status codes, model names, latency and token counts. It NEVER prints a key, a header or a request URL with a key.
-Usage:  python scripts/check_llm_providers.py          (reads GEMINI_API_KEY and OLLAMA_API_KEY from .env or the environment)"""
+Usage:  python scripts/check_llm_providers.py [gemini|ollama]   (reads GEMINI_API_KEY and OLLAMA_API_KEY from .env or the environment)"""
 from __future__ import annotations
 import json, os, sys, time
 from pathlib import Path
@@ -12,6 +12,7 @@ OLLAMA = "https://ollama.com"
 CANDIDATES = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]
 SCHEMA = {"type": "object", "properties": {"question": {"type": "string"}, "claims": {"type": "array", "items": {"type": "string"}}, "done": {"type": "boolean"}}, "required": ["question", "claims", "done"]}
 PROMPT = "A customer is about to send AED 4,800 to a payee seen for the first time today. Write ONE short follow-up question to ask them, list any claims they have made so far (none yet), and say whether you are done."
+STRICT = PROMPT + " Reply with ONLY a JSON object with keys question (string), claims (array of strings), done (boolean). No markdown, no extra text."
 SECRETS: list[str] = []
 
 
@@ -78,23 +79,30 @@ def check_ollama() -> None:
         print("  error:", clean(r.text)); return
     names = [m.get("name") for m in r.json().get("models", [])]
     print(f"  {len(names)} models; first 12: {names[:12]}")
-    for name in [n for n in ("gemma4:31b", "nemotron-3-nano:30b", "deepseek-v4.1-flash") if n in names][:3]:
-        body = {"model": name, "messages": [{"role": "user", "content": PROMPT}], "stream": False, "format": SCHEMA, "options": {"temperature": 0}}
-        t = time.perf_counter()
-        r = httpx.post(f"{OLLAMA}/api/chat", headers=h, json=body, timeout=120)
-        ms = (time.perf_counter() - t) * 1000
-        if r.status_code != 200:
-            print(f"  {name}: HTTP {r.status_code} in {ms:.0f} ms: {clean(r.text)}"); continue
-        try:
-            out = json.loads(r.json()["message"]["content"])
-        except Exception:
-            out = None
-        print(f"  {name}: HTTP 200 in {ms:.0f} ms, schema-valid JSON: {valid(out)} (cloud has no constrained decoding, so this is the model following instructions)")
+    for name in [n for n in ("gemma4:31b", "gpt-oss:20b", "nemotron-3-nano:30b", "deepseek-v4.1-flash") if n in names]:
+        for label, extra in (("format=schema (ignored by cloud)", {"format": SCHEMA}), ("prompt-only JSON", {})):
+            body = {"model": name, "messages": [{"role": "user", "content": PROMPT if "format" in extra else STRICT}], "stream": False, "options": {"temperature": 0}, **extra}
+            t = time.perf_counter()
+            try:
+                r = httpx.post(f"{OLLAMA}/api/chat", headers=h, json=body, timeout=120)
+            except httpx.HTTPError as e:
+                print(f"  {name} [{label}]: network error {type(e).__name__}"); continue
+            ms = (time.perf_counter() - t) * 1000
+            if r.status_code != 200:
+                print(f"  {name} [{label}]: HTTP {r.status_code} in {ms:.0f} ms: {clean(r.text)}"); continue
+            try:
+                out = json.loads(r.json()["message"]["content"])
+            except Exception:
+                out = None
+            print(f"  {name} [{label}]: HTTP 200 in {ms:.0f} ms, schema-valid JSON: {valid(out)}")
 
 
 if __name__ == "__main__":
     load_env()
     if not SECRETS:
         print("No keys found. Put GEMINI_API_KEY=... (and optionally OLLAMA_API_KEY=...) in .env, then rerun."); sys.exit(0)
-    check_gemini()
-    check_ollama()
+    only = sys.argv[1] if len(sys.argv) > 1 else "all"
+    if only in ("all", "gemini"):
+        check_gemini()
+    if only in ("all", "ollama"):
+        check_ollama()
