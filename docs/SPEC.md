@@ -64,6 +64,32 @@ APIs (OpenAPI is the source of truth; full detail in `docs/HARNESS.md`): `/v1/ev
 
 No Kafka until a measured throughput need appears. Early risk: local Python is 3.14, so check PyTorch and LightGBM wheel support in M1; otherwise pin Python 3.12 with uv.
 
+### Stack decisions in detail
+
+- **Is a backend needed? Yes.** The product is a runtime that enforces policy, keeps a ledger, runs models and serves APIs. A frontend-only app cannot hold secrets, state or guarantees.
+- **Languages:** Python for kernel, API, ML and evaluation; TypeScript (Next.js) for the console; SQL for Postgres.
+- **LLM access:** one OpenAI-compatible client interface. Local models through Ollama during development; one cheap API model for the final measured evals. Provider and budget are open decisions.
+- **Policy language:** typed Python rules first (testable, simple), with an interface that can move to Cedar or OPA later.
+- **Queues and streaming:** none at first (in-process async plus a Postgres jobs table). Kafka only if a measured throughput need appears.
+- **Machine facts checked on 2026-11-04:** Docker 29.2.1, Ollama 0.33.2, uv, Node and npm are installed; Python is 3.14.7. `pip index` lists torch 2.15.0 and lightgbm 4.7.0 for this interpreter; a real install and import test is the first task of M1, with a fallback to Python 3.12 through uv.
+
+### API keys and secrets
+
+| Need | Key required | When |
+|---|---|---|
+| ULB, UCI SMS Spam, OFAC downloads | None | Works today |
+| Elliptic via the PyG mirror | None (licence unconfirmed) | M5 |
+| Development LLM | None (local Ollama) | M2 |
+| Final-eval LLM | One provider API key (open decision), with a spend limit | M2 onwards |
+| Postgres | Connection string; local Docker Compose, no cloud key | M1 |
+| Cloud demo | Cloud credentials, chosen at M6 | M6 |
+
+Secrets live in `.env` (git-ignored) and in the host's secret store. They are never committed, never written in docs, and are entered by the owner, not by the assistant.
+
+### Phase detail: stack and learning goal per milestone
+
+See `learn/LEARN.md` section 10 for the table (milestone, what we build, stack touched, what the owner learns, how to verify). `learn/LEARN.md` is a living teaching guide, git-ignored on purpose, updated at the end of every milestone.
+
 ## 6. Data (real first; simulated only where none exists, always labelled)
 
 | Need | Source | Status |
