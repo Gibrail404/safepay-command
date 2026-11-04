@@ -2,9 +2,13 @@
 
 An AI decision platform for payment risk, sanctions screening and fraud investigation, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
 
-**Status: milestones M0 to M5 built and tested; M6 (hardening, deployment, end-to-end tests, load numbers) is next.** Every number below comes from a generated report in `docs/reports/`, each of which states whether its data is real or simulated.
+**Status: milestones M0 to M6 built and tested. Not deployed to a cloud yet** (the container image is built and run locally; see [docs/DEPLOY.md](docs/DEPLOY.md)). Every number below comes from a generated report in `docs/reports/`, each of which states whether its data is real or simulated.
 
 - Master spec: [docs/SPEC.md](docs/SPEC.md) · Harness design: [docs/HARNESS.md](docs/HARNESS.md) · Data register and licence caveats: [docs/DATA.md](docs/DATA.md)
+- [Threat model](docs/THREAT_MODEL.md) (each threat with its test and its residual risk) · [Model cards](docs/MODEL_CARDS.md) · [Product requirements](docs/PRD.md) · [Deploying](docs/DEPLOY.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Blog draft](docs/BLOG.md)
+
+![Case queue of real alerts](docs/figures/console-queue.png)
+![A case with an AI summary whose sentences cite facts](docs/figures/console-case.png)
 
 ## What is in it
 
@@ -17,7 +21,8 @@ An AI decision platform for payment risk, sanctions screening and fraud investig
 | Decision Lab | Simulator with known truth, counterfactual estimators checked against it, uplift, simulation API | `docs/reports/decision_lab.md`, `uplift.md` (simulated) |
 | Graph and cases | Real Elliptic transaction graph: does structure help, how alerts group into cases | `docs/reports/graph.md` (real data) |
 | Flywheel | How the way analysts' labels are collected changes what the model learns | `docs/reports/flywheel.md` (real transactions, simulated analysts) |
-| Console | Next.js analyst console that renders only what the API returns: case queue, investigation summary with citations, decisions, reports, audit trail | run it below |
+| Console | Next.js analyst console that renders only what the API returns: case queue, investigation summary with citations, decisions, reports, audit trail; read-only roles supported | 8 Playwright browser tests (`cd console && npm run e2e`) |
+| Security and operations | Roles per API key, per-key rate limit, request-size limits, AI spending caps kept in the database, name and address redaction | `docs/THREAT_MODEL.md`, `reports/redaction.md`, `reports/load.md` |
 
 Honest headline findings: simple neighbour features add almost nothing on the real graph while the model collapses after a known market shutdown (drift); corrected counterfactual estimators are close to unbiased but their intervals still under-cover; name folding did not help screening; coached victims evade question-based checks. See each report's limits section.
 
@@ -32,7 +37,8 @@ Honest headline findings: simple neighbour features add almost nothing on the re
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install pandas numpy scipy pyarrow pyyaml pytest fastapi uvicorn httpx pydantic sqlalchemy "psycopg[binary]" hypothesis scikit-learn lightgbm torch rapidfuzz matplotlib
+pip install pandas numpy scipy pyarrow pyyaml pytest fastapi uvicorn httpx pydantic sqlalchemy "psycopg[binary]" hypothesis scikit-learn lightgbm torch rapidfuzz matplotlib spacy
+python -m spacy download en_core_web_sm         # optional: the name-redaction layer; without it only patterns run
 cd pipelines && python -m safepay_data all    # downloads and validates the real datasets (about 300 MB)
 cd .. && python -m pytest -q                  # SQLite by default; set SAFEPAY_TEST_DATABASE_URL for PostgreSQL
 ```
@@ -52,9 +58,11 @@ Tests: `SAFEPAY_TEST_DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@
 
 ## Regenerate the reports
 
+`make help` lists one command per job (`make test-pg`, `make reports`, `make console-check`, `make load`). Each report script was run individually when its report was produced; the full `make reports` chain has not been run end to end.
+
 ```bash
 cd ml && python -m safepay_ml.train_risk && python -m safepay_ml.train_text && cd ..
-python scripts/eval_screening.py && python scripts/eval_graph.py && python scripts/eval_flywheel.py
+python scripts/eval_screening.py && python scripts/eval_redaction.py && python scripts/eval_graph.py && python scripts/eval_flywheel.py
 python scripts/eval_lab.py && python scripts/eval_uplift.py           # simulated
 python scripts/eval_llm.py && python scripts/eval_sandbox.py          # need OLLAMA_API_KEY (and optionally GEMINI_API_KEY)
 ```
@@ -73,4 +81,4 @@ The licence terms of the OFAC, ULB and Elliptic data are not confirmed; the repo
 
 ## Known gaps
 
-Names and addresses are not redacted before LLM calls (needs entity recognition); injection screening is heuristic; budget counters are in memory; one API key per tenant and no roles; tool handlers run inside the database transaction. Planned for M6 together with deployment and end-to-end tests.
+Names still leak to the AI provider (73% to 88% removed in tests); injection screening is heuristic; API keys are static strings with three roles and no rotation; the rate limiter is per process; tool handlers run inside the database transaction (an outbox pattern was considered and not built); nothing is deployed; data licences are unconfirmed. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
