@@ -2,9 +2,9 @@
   "name": "payment_risk_v1",
   "rules": [
     { "id": "R01", "code": "LARGE_AMOUNT", "when": { "field": "amount", "op": ">=", "value": 3000 }, "outcome": "warn" },
-    { "id": "R02", "code": "MODEL_RISK_ELEVATED", "when": { "field": "risk_score", "op": ">=", "value": 0.5 }, "outcome": "warn" },
+    { "id": "R02", "code": "MODEL_RISK_ELEVATED", "when": { "field": "risk_band", "op": "==", "value": "elevated" }, "outcome": "warn" },
     { "id": "R03", "code": "NEW_PAYEE_LARGE_AMOUNT", "when": { "all": [ { "field": "payee_age_days", "op": "<", "value": 1 }, { "field": "amount", "op": ">=", "value": 3000 } ] }, "outcome": "hold" },
-    { "id": "R04", "code": "MODEL_RISK_HIGH", "when": { "field": "risk_score", "op": ">=", "value": 0.8 }, "outcome": "hold" },
+    { "id": "R04", "code": "MODEL_RISK_HIGH", "when": { "field": "risk_band", "op": "==", "value": "high" }, "outcome": "hold" },
     { "id": "R05", "code": "SCREENING_HIT_CONFIRMED", "when": { "field": "screening_status", "op": "==", "value": "confirmed_hit" }, "outcome": "block" }
   ]
 }

@@ -2,8 +2,8 @@
 name = "safepay-command"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["pandas", "numpy", "scipy", "pyarrow", "pyyaml", "fastapi", "pydantic", "sqlalchemy", "psycopg[binary]", "uvicorn", "httpx", "hypothesis"]
+dependencies = ["pandas", "numpy", "scipy", "pyarrow", "pyyaml", "fastapi", "pydantic", "sqlalchemy", "psycopg[binary]", "uvicorn", "httpx", "hypothesis", "scikit-learn", "lightgbm", "torch"]
 
 [tool.pytest.ini_options]
-pythonpath = ["pipelines", "kernel"]
+pythonpath = ["pipelines", "kernel", "ml"]
 markers = ["integration: needs the real datasets downloaded (run: python -m safepay_data all)"]

@@ -46,6 +46,11 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     sf = init_db(engine)
     store = PolicyStore(settings.policy_dir)
     registry = registry or ToolRegistry()
+    try:
+        from .risk_tool import register_if_available
+        register_if_available(registry)
+    except ImportError:                       # the ml package is optional for the kernel
+        pass
     decisions = DecisionService(sf, store.for_workload)
     gateway = ToolGateway(sf, registry, settings.capability_secret)
     app = FastAPI(title="SafePay Command kernel", version="0.2.0")

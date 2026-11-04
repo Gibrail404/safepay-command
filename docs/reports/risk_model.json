@@ -1,0 +1,264 @@
+{
+  "amount_only_test_average_precision": 0.0014479842074899473,
+  "bootstrap_resamples": 300,
+  "calibration_test": {
+    "lightgbm": {
+      "isotonic": {
+        "brier": 0.0003612006983939613,
+        "ece_quantile10": 6.524853923435108e-05,
+        "log_loss": 0.0022581873313746877,
+        "mean_predicted": 0.0012514187126177606
+      },
+      "platt": {
+        "brier": 0.0003579504498480072,
+        "ece_quantile10": 0.0002825108957747917,
+        "log_loss": 0.0024210011375197394,
+        "mean_predicted": 0.0011690242271393996
+      },
+      "raw": {
+        "brier": 0.0003565445422688427,
+        "ece_quantile10": 0.00027230617778863857,
+        "log_loss": 0.002445932610279567,
+        "mean_predicted": 0.0011302192298367165
+      }
+    },
+    "logreg": {
+      "isotonic": {
+        "brier": 0.0006217006863507085,
+        "ece_quantile10": 4.475114286208225e-05,
+        "log_loss": 0.003949130236681426,
+        "mean_predicted": 0.0012719161089900293
+      },
+      "platt": {
+        "brier": 0.000685164050919795,
+        "ece_quantile10": 0.00022040693176296285,
+        "log_loss": 0.0034764061183423546,
+        "mean_predicted": 0.0011890291742173852
+      },
+      "raw": {
+        "brier": 0.0006724006226559354,
+        "ece_quantile10": 0.000267276642697372,
+        "log_loss": 0.0035330900445041387,
+        "mean_predicted": 0.0015839438945494837
+      }
+    },
+    "mlp": {
+      "isotonic": {
+        "brier": 0.00038585685297222943,
+        "ece_quantile10": 0.00020539488413625574,
+        "log_loss": 0.0023972750454261615,
+        "mean_predicted": 0.0011463674427824014
+      },
+      "platt": {
+        "brier": 0.0004277349197334268,
+        "ece_quantile10": 0.00023247145714611636,
+        "log_loss": 0.0024947505870598625,
+        "mean_predicted": 0.0011118433752488983
+      },
+      "raw": {
+        "brier": 0.0011972974796381536,
+        "ece_quantile10": 0.005520700658931746,
+        "log_loss": 0.007695136966617233,
+        "mean_predicted": 0.006837367910783857
+      }
+    }
+  },
+  "data": {
+    "fraud": {
+      "test": 75,
+      "train": 360,
+      "val": 57
+    },
+    "parquet_sha256": "a4512e48ca4d29cdb5f47d4ca4aef9d9bae24927e2b7a220e9d63e821d1f1ebc",
+    "rows": {
+      "test": 56962,
+      "train": 170884,
+      "val": 56961
+    },
+    "source": "ULB credit card fraud (real, anonymised)",
+    "split_fractions": [
+      0.6,
+      0.2,
+      0.2
+    ]
+  },
+  "deployed": {
+    "model_type": "lightgbm",
+    "threshold_probability": 0.0017226463803291484
+  },
+  "duplicate_overlap": {
+    "also_in_train": 648,
+    "fraud_also_in_train": 0,
+    "test_rows": 56962
+  },
+  "extras": {
+    "lightgbm": {
+      "best_iteration": 164
+    },
+    "mlp": {
+      "latency_single_row": {
+        "p50_ms": 0.08422949940722901,
+        "p95_ms": 0.10021010066338931
+      },
+      "params": {
+        "batch_size": 1024,
+        "epochs": 40,
+        "lr": 0.001,
+        "patience": 5,
+        "pos_weight": "sqrt(neg/pos)",
+        "weight_decay": 0.0001
+      },
+      "seeds": [
+        {
+          "best_epoch": 5,
+          "seed": 0,
+          "test_ap": 0.8038829362851311,
+          "val_ap": 0.7687389812079592
+        },
+        {
+          "best_epoch": 5,
+          "seed": 1,
+          "test_ap": 0.8063843841676916,
+          "val_ap": 0.7713193712898103
+        },
+        {
+          "best_epoch": 3,
+          "seed": 2,
+          "test_ap": 0.818182433532129,
+          "val_ap": 0.7754844502466222
+        },
+        {
+          "best_epoch": 4,
+          "seed": 3,
+          "test_ap": 0.8090637487254791,
+          "val_ap": 0.7838490705267839
+        },
+        {
+          "best_epoch": 3,
+          "seed": 4,
+          "test_ap": 0.8240485615305416,
+          "val_ap": 0.7600438449451382
+        }
+      ],
+      "test_ap_mean_of_seeds": 0.8123124128481946,
+      "test_ap_sd_of_seeds": 0.007601917474825616,
+      "torch": "2.15.0"
+    }
+  },
+  "fpr_target": 0.01,
+  "generated_at": "2026-11-04T13:55:50+00:00",
+  "libraries": {
+    "lightgbm": "4.7.0",
+    "numpy": "2.5.4",
+    "python": "3.14.7",
+    "scikit-learn": "1.9.1",
+    "torch": "2.15.0"
+  },
+  "models": {
+    "lightgbm": {
+      "latency_single_row": {
+        "p50_ms": 0.052270999731263146,
+        "p95_ms": 0.06379104979714612
+      },
+      "test_ap_ci95": [
+        0.7265878244433824,
+        0.8941789180712184
+      ],
+      "test_at_threshold": {
+        "fn": 9,
+        "fp": 406,
+        "fpr": 0.0071369557192328655,
+        "precision": 0.13983050847457626,
+        "recall": 0.88,
+        "tn": 56481,
+        "tp": 66
+      },
+      "test_average_precision": 0.8119722482962047,
+      "test_recall_ci95": [
+        0.8051629742806213,
+        0.9552238805970149
+      ],
+      "test_roc_auc": 0.9844530384797933,
+      "threshold_logit_at_val_fpr": -6.644661291913591,
+      "unique_rows_only": {
+        "average_precision": 0.8119757779039374,
+        "fpr": 0.007219189530397055,
+        "fraud": 75,
+        "n": 56314,
+        "recall": 0.88
+      },
+      "val_average_precision": 0.7856974838231326
+    },
+    "logreg": {
+      "latency_single_row": {
+        "p50_ms": 0.002666000000317581,
+        "p95_ms": 0.01743334960337956
+      },
+      "test_ap_ci95": [
+        0.5786160296363188,
+        0.7926516742184806
+      ],
+      "test_at_threshold": {
+        "fn": 11,
+        "fp": 522,
+        "fpr": 0.00917608592472797,
+        "precision": 0.10921501706484642,
+        "recall": 0.8533333333333334,
+        "tn": 56365,
+        "tp": 64
+      },
+      "test_average_precision": 0.683798275016638,
+      "test_recall_ci95": [
+        0.7647058823529411,
+        0.9296256994018908
+      ],
+      "test_roc_auc": 0.9723158776756259,
+      "threshold_logit_at_val_fpr": -4.941518577035568,
+      "unique_rows_only": {
+        "average_precision": 0.6838086073357805,
+        "fpr": 0.0092818151105105,
+        "fraud": 75,
+        "n": 56314,
+        "recall": 0.8533333333333334
+      },
+      "val_average_precision": 0.6204619078314434
+    },
+    "mlp": {
+      "latency_single_row": {
+        "p50_ms": 0.08422949940722901,
+        "p95_ms": 0.10021010066338931
+      },
+      "test_ap_ci95": [
+        0.7397348396485182,
+        0.8948064619477715
+      ],
+      "test_at_threshold": {
+        "fn": 10,
+        "fp": 480,
+        "fpr": 0.008437780160669397,
+        "precision": 0.11926605504587157,
+        "recall": 0.8666666666666667,
+        "tn": 56407,
+        "tp": 65
+      },
+      "test_average_precision": 0.817886471141565,
+      "test_recall_ci95": [
+        0.7857142857142857,
+        0.9403204565408253
+      ],
+      "test_roc_auc": 0.9775937091661246,
+      "threshold_logit_at_val_fpr": -2.4299399852752686,
+      "unique_rows_only": {
+        "average_precision": 0.8178990337342479,
+        "fpr": 0.008535002400469425,
+        "fraud": 75,
+        "n": 56314,
+        "recall": 0.8666666666666667
+      },
+      "val_average_precision": 0.7764383528297241
+    }
+  },
+  "prevalence_test": 0.001316667251852112,
+  "seconds": 19.3,
+  "version": "e18bf1ed46d0"
+}
