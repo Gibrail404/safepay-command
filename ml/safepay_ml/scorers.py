@@ -68,4 +68,9 @@ class MLPScorer:
         return MLPScorer(nets, meta["mean"], meta["std"])
 
 
-LOADERS = {"logreg": LogRegScorer.load, "lightgbm": LightGBMScorer.load, "mlp": MLPScorer.load}
+def _load_tfidf(directory: Path):
+    from .text_model import TfidfLogRegScorer
+    return TfidfLogRegScorer.load(directory)
+
+
+LOADERS = {"logreg": LogRegScorer.load, "lightgbm": LightGBMScorer.load, "mlp": MLPScorer.load, "tfidf_logreg": _load_tfidf}

@@ -2,7 +2,7 @@
 
 An AI decision platform for payment risk, sanctions screening and fraud investigation, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
 
-**Status: M1 done (kernel).** Built and tested: the real-data pipeline (M0) and the kernel (M1): a hash-chained ledger, idempotent and replayable decisions, a deterministic policy engine, a tool gateway with risk tiers, signed capabilities and approvals, and the HTTP API. Not built yet: the risk model, the agents, screening, the simulator, the console (M2 and later).
+**Status: M2 partly done.** Built and tested: the real-data pipeline (M0), the kernel (M1), and trained models (M2): a transaction risk model (LightGBM, PyTorch MLP, logistic regression, calibrated, with a generated report) and a scam-like text model, both served as read-only tools. The kernel (M1): a hash-chained ledger, idempotent and replayable decisions, a deterministic policy engine, a tool gateway with risk tiers, signed capabilities and approvals, and the HTTP API. Not built yet: the model gateway and LLM agents (rest of M2), screening, the simulator, the console (M3 and later).
 
 - Master spec: [docs/SPEC.md](docs/SPEC.md)
 - Data register, licences and verification log: [docs/DATA.md](docs/DATA.md)
@@ -33,6 +33,15 @@ PYTHONPATH=kernel uvicorn --factory safepay.api:create_app --port 8000
 SAFEPAY_TEST_DATABASE_URL=$DATABASE_URL python -m pytest tests/kernel -q
 ```
 The API contract is generated from the code into `docs/openapi.json` (`python scripts/export_openapi.py`). Policies are version-controlled rules in `config/policies/`.
+
+## Train the models (real data)
+
+```bash
+cd pipelines && python -m safepay_data all && cd ../ml
+python -m safepay_ml.train_risk     # writes models/risk/ and docs/reports/risk_model.md (about 20 s)
+python -m safepay_ml.train_text     # writes models/text_scam/ and docs/reports/text_model.md (about 1 s)
+```
+macOS note: LightGBM needs `brew install libomp`, and LightGBM and PyTorch must never share one process (see `ml/safepay_ml/__init__.py`).
 
 ## Data in v0.1 (all downloaded and validated, see docs/DATA.md for licence caveats)
 

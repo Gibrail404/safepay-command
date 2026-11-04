@@ -1,0 +1,127 @@
+{
+  "c_grid": [
+    {
+      "C": 0.3,
+      "val_ap": 0.9620798658017301
+    },
+    {
+      "C": 1.0,
+      "val_ap": 0.9658610756813243
+    },
+    {
+      "C": 3.0,
+      "val_ap": 0.9679784115101442
+    },
+    {
+      "C": 10.0,
+      "val_ap": 0.9660183697645278
+    },
+    {
+      "C": 30.0,
+      "val_ap": 0.9659175057991863
+    }
+  ],
+  "calibration_test": {
+    "platt": {
+      "brier": 0.012124934686405757,
+      "ece_quantile10": 0.008802015633192222,
+      "log_loss": 0.049561301930252405,
+      "mean_predicted": 0.12894638059215793
+    },
+    "raw": {
+      "brier": 0.019849115804769103,
+      "ece_quantile10": 0.04042368255773648,
+      "log_loss": 0.09087889284789528,
+      "mean_predicted": 0.12136956375377
+    }
+  },
+  "chosen_C": 3.0,
+  "data": {
+    "after_dedup": 5159,
+    "label_conflicts_among_duplicates": 0,
+    "parquet_sha256": "a9c87c1692c37eac95ca7d3c3f5762c8d9e7bb1cb640d22c407bc05b01501f99",
+    "raw_rows": 5574,
+    "removed_duplicates": 415,
+    "rows": {
+      "test": 1032,
+      "train": 3095,
+      "val": 1032
+    },
+    "source": "UCI SMS Spam Collection (CC BY 4.0)",
+    "spam": {
+      "test": 128,
+      "train": 385,
+      "val": 129
+    }
+  },
+  "dedup": {
+    "after_dedup": 5159,
+    "label_conflicts_among_duplicates": 0,
+    "raw_rows": 5574,
+    "removed_duplicates": 415
+  },
+  "generated_at": "2026-11-04T13:58:28+00:00",
+  "latency_single_message": {
+    "p50_ms": 0.0048749989218777046,
+    "p95_ms": 0.0056722492445260226
+  },
+  "libraries": {
+    "numpy": "2.5.4",
+    "python": "3.14.7",
+    "scikit-learn": "1.9.1"
+  },
+  "models": {
+    "naive_bayes_baseline": {
+      "test_ap": 0.9674050620857186,
+      "test_ap_ci95": [
+        0.943024858953794,
+        0.9868197333576223
+      ],
+      "test_at_threshold": {
+        "fn": 7,
+        "fp": 18,
+        "fpr": 0.01991150442477876,
+        "precision": 0.8705035971223022,
+        "recall": 0.9453125,
+        "tn": 886,
+        "tp": 121
+      },
+      "test_recall_ci95": [
+        0.905952380952381,
+        0.9829096045197739
+      ],
+      "test_roc_auc": 0.9867343058628318,
+      "threshold_logit": -2.0959920467354394,
+      "val_ap": 0.9439094501512317
+    },
+    "tfidf_logreg": {
+      "test_ap": 0.9755888034787155,
+      "test_ap_ci95": [
+        0.9567943758785331,
+        0.9912181346027408
+      ],
+      "test_at_threshold": {
+        "fn": 8,
+        "fp": 7,
+        "fpr": 0.007743362831858407,
+        "precision": 0.9448818897637795,
+        "recall": 0.9375,
+        "tn": 897,
+        "tp": 120
+      },
+      "test_recall_ci95": [
+        0.892558060466576,
+        0.9761904761904762
+      ],
+      "test_roc_auc": 0.9938640763274337,
+      "threshold_logit": -1.3559128485359484,
+      "val_ap": 0.9679784115101442
+    }
+  },
+  "numpy_vs_sklearn_max_abs_diff": 3.552713678800501e-15,
+  "prevalence_test": 0.12403100775193798,
+  "seconds": 1.2,
+  "threshold_probability": 0.34900489857789874,
+  "version": "8eebdbf077f5",
+  "vocabulary_size": 7559
+}
