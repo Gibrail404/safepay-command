@@ -79,6 +79,9 @@ def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str
         questions.append(step.question)
         state.asked.append(step.question)
         state.answers.append(answer(victim_gw, run_id, p, step.question, turn))
+    final, res = next_step(gw, f"{run_id}-end", evidence, state)               # reads the last answer too
+    final_fell_back = res is not None and res.path == "fallback"
+    claims += final.claims
     raw = " ".join(state.answers)
-    return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks,
+    return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks, "final_reading_fell_back": bool(final_fell_back),
             "flags_from_extracted_phrases": answer_flags(claims), "flags_from_raw_answers": answer_flags([raw])}

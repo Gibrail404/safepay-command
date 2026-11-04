@@ -25,6 +25,10 @@ class QuestionStep(BaseModel):
     done: bool
 
 
+class Extraction(BaseModel):
+    claims: list[str] = Field(max_length=5)
+
+
 @dataclass
 class QuestionState:
     asked: list[str] = field(default_factory=list)
@@ -60,9 +64,27 @@ def fallback_step(state: QuestionState) -> QuestionStep:
     return QuestionStep(question=q, claims=[], done=False)
 
 
+def extraction_issues(ex: Extraction, answers_text: str) -> list[str]:
+    hay = _norm(answers_text)
+    return [f"claim not copied word for word from the customer's messages: {c[:40]!r}" for c in ex.claims if len(c) > 120 or _norm(c) not in hay]
+
+
+def extract_claims(gateway: LLMGateway, run_id: str, state: QuestionState) -> tuple[list[str], LLMResult | None]:
+    """The last answer arrives after the last question, so one more pass is needed to read ALL the answers. Nothing is asked of the customer.
+    Claims must be word-for-word quotes; if the model cannot do that, the safe default is no claims, which adds no friction and removes none."""
+    if not state.answers:
+        return [], None
+    answers_text = "\n".join(state.answers)
+    task = ("You are the Questioner's reading step. Do NOT ask anything. List short phrases copied WORD FOR WORD from the customer's messages that describe their situation "
+            "(who asked for the payment, whether they know the payee, any hurry or secrecy). If there are none, use an empty list. Output JSON with one key, claims.")
+    result = gateway.generate(LLMRequest(task=task, output=Extraction, untrusted=answers_text, check=lambda ex: extraction_issues(ex, answers_text), max_tokens=250), run_id, lambda: Extraction(claims=[]))
+    return result.parsed.claims, result
+
+
 def next_step(gateway: LLMGateway, run_id: str, evidence: list[Evidence], state: QuestionState) -> tuple[QuestionStep, LLMResult | None]:
     if len(state.asked) >= MAX_QUESTIONS:
-        return QuestionStep(question=DONE_TEXT, claims=[], done=True), None
+        claims, result = extract_claims(gateway, f"{run_id}-final", state)        # the last answer has not been read yet
+        return QuestionStep(question=DONE_TEXT, claims=claims, done=True), result
     answers_text = "\n".join(state.answers)
     facts = "\n".join(f"- {e.text}" for e in evidence if e.kind in ("amount", "payee"))
     asked = "\n".join(f"- {q}" for q in state.asked) or "- (none yet)"

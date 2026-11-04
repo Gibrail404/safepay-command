@@ -47,7 +47,7 @@ def summarise(rows: list[dict]) -> dict:
         anyf = lambda key: sum(any(x[key].values()) for x in r)
         out[g] = {"conversations": len(r), "any_flag_from_extracted_phrases": rate(anyf("flags_from_extracted_phrases"), len(r)), "any_flag_from_raw_answers": rate(anyf("flags_from_raw_answers"), len(r)),
                   "by_flag_raw": {f: sum(x["flags_from_raw_answers"][f] for x in r) for f in r[0]["flags_from_raw_answers"]},
-                  "questions_that_fell_back_to_the_fixed_bank": sum(x["fallback_questions"] for x in r), "total_questions": 3 * len(r),
+                  "questions_that_fell_back_to_the_fixed_bank": sum(x["fallback_questions"] for x in r), "final_reading_fell_back": sum(x["final_reading_fell_back"] for x in r), "total_questions": 3 * len(r),
                   "friction_only_violations": sum(friction_only_violation(x["flags_from_raw_answers"]) or friction_only_violation(x["flags_from_extracted_phrases"]) for x in r)}
     return out
 
@@ -65,13 +65,13 @@ def render(rep: dict) -> str:
     for g, v in s.items():
         b = v["by_flag_raw"]
         o.append(f"| {NAMES[g]} | {b['third_party_instructed']} | {b['urgency']} | {b['secrecy']} | {b['unknown_payee']} |")
-    o += ["", "## Safety checks", "", "| Who is answering | Questions asked | Questions replaced by the fixed question bank (model reply failed a rule) | Cases where a flag lowered the outcome |", "|---|---|---|---|"]
+    o += ["", "## Safety checks", "", "| Who is answering | Questions asked | Questions replaced by the fixed question bank (model reply failed a rule) | Final reading of all answers that fell back to no phrases | Cases where a flag lowered the outcome |", "|---|---|---|---|---|"]
     for g, v in s.items():
-        o.append(f"| {NAMES[g]} | {v['total_questions']} | {v['questions_that_fell_back_to_the_fixed_bank']} | {v['friction_only_violations']} |")
+        o.append(f"| {NAMES[g]} | {v['total_questions']} | {v['questions_that_fell_back_to_the_fixed_bank']} | {v['final_reading_fell_back']} of {v['conversations']} | {v['friction_only_violations']} |")
     o += ["", "## Limits (read these)", "",
           "- The victim is an LLM following a persona; real victims behave differently, so these rates describe this simulation only.",
           "- The coached cover stories are three short fixed scripts. Real scammers adapt.",
-          "- The system only extracts phrases from answers 1 and 2 before it stops asking; the third answer is not extracted, so the 'extracted phrases' column can miss what the last answer said. The upper-bound column shows the difference.",
+          "- After the third question the system now reads all three answers once more (earlier it never read the third answer). The 'upper bound' column searches the raw answers directly and shows how much the model's phrase extraction still misses.",
           "- Flags are plain keyword rules, so they miss paraphrases; that is a known gap.",
           "- Small samples, one run, one model. Intervals are wide.", ""]
     return "\n".join(o)
