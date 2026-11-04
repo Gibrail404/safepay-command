@@ -88,7 +88,7 @@ Secrets live in `.env` (git-ignored) and in the host's secret store. They are ne
 
 ### Phase detail: stack and learning goal per milestone
 
-See `learn/LEARN.md` section 10 for the table (milestone, what we build, stack touched, what the owner learns, how to verify). `learn/LEARN.md` is a living teaching guide, git-ignored on purpose, updated at the end of every milestone.
+The owner keeps a living teaching guide (Word document, outside this repository) with a table of milestone, what we build, stack touched, what the owner learns and how to verify. It is updated at the end of every milestone.
 
 ## 6. Data (real first; simulated only where none exists, always labelled)
 

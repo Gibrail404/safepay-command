@@ -7,4 +7,3 @@ data/processed/
 .env
 node_modules/
 .next/
-learn/
