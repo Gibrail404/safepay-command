@@ -73,6 +73,16 @@ No Kafka until a measured throughput need appears. Early risk: local Python is 3
 - **Queues and streaming:** none at first (in-process async plus a Postgres jobs table). Kafka only if a measured throughput need appears.
 - **Machine facts checked on 2026-11-04:** Docker 29.2.1, Ollama 0.33.2, uv, Node and npm are installed; Python is 3.14.7. `pip index` lists torch 2.15.0 and lightgbm 4.7.0 for this interpreter; a real install and import test is the first task of M1, with a fallback to Python 3.12 through uv.
 
+### LLM in a deployed demo (decision 2026-11-04)
+
+Local Ollama exists only on the developer's machine, so a deployed demo cannot depend on it. The model gateway therefore has three interchangeable providers behind one interface:
+
+1. **Hosted, OpenAI-compatible API** (base URL, key and model from environment variables, never in the repo). This is what the deployed demo uses, with a hard per-run and per-day spend cap.
+2. **Ollama** for local development and offline tests.
+3. **Deterministic fallback**: template-based Interviewer and Explainer output. It is used when no key is set, when the budget is exhausted, or when the provider fails, so the deployed app never breaks. It is also the baseline that the LLM versions are measured against in the evaluations.
+
+Trained models (LightGBM and the text model, about 1.5 MB in total) ship inside the container image and need no GPU. The database is managed PostgreSQL. The cloud target stays an open decision for M6.
+
 ### API keys and secrets
 
 | Need | Key required | When |
