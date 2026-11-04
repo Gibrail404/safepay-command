@@ -1,0 +1,25 @@
+{
+  "name": "payee_screening_v1",
+  "rules": [
+    {
+      "id": "S01",
+      "code": "SCREEN_STRONG_MATCH",
+      "when": {
+        "field": "screen_band",
+        "op": "==",
+        "value": "strong"
+      },
+      "outcome": "hold"
+    },
+    {
+      "id": "S02",
+      "code": "SCREEN_POSSIBLE_MATCH",
+      "when": {
+        "field": "screen_band",
+        "op": "==",
+        "value": "review"
+      },
+      "outcome": "hold"
+    }
+  ]
+}

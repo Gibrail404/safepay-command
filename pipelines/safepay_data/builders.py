@@ -54,7 +54,38 @@ def build_ofac(ds: Dataset) -> dict:
     return write_processed(ds, df, {"types": df["sdn_type"].replace("", "entity").value_counts().to_dict(), "distinct_programs": int(df["program"].nunique())})
 
 
-BUILDERS = {"ulb_creditcard": build_ulb, "sms_spam": build_sms, "ofac_sdn": build_ofac}
+ALT_COLUMNS = ["ent_num", "alt_num", "alt_type", "alt_name", "alt_remarks"]
+
+
+def build_ofac_alt(ds: Dataset) -> dict:
+    df = pd.read_csv(fetch(ds, "ALT.CSV", force=True), header=None, names=ALT_COLUMNS, dtype=str, keep_default_na=False, encoding="latin-1")
+    for c in df.columns:
+        df[c] = df[c].str.strip().replace("-0-", "")
+    if len(df) < 1000 or df["alt_name"].eq("").mean() > 0.01:
+        raise ValueError("ofac_alt: file does not look like the SDN alias list")
+    return write_processed(ds, df, {"alias_types": df["alt_type"].value_counts().to_dict(), "entries_with_aliases": int(df["ent_num"].nunique())})
+
+
+def build_census_surnames(ds: Dataset) -> dict:
+    with zipfile.ZipFile(fetch(ds, "names.zip")) as z:
+        csv_name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
+        df = pd.read_csv(z.open(csv_name), dtype=str, keep_default_na=False)
+    df = df.rename(columns={"name": "name", "count": "count"})[["name", "count"]]
+    df["count"] = pd.to_numeric(df["count"], errors="coerce").fillna(0).astype("int64")          # suppressed counts "(S)" become 0
+    if len(df) < 100_000:
+        raise ValueError("census_surnames: unexpected size")
+    return write_processed(ds, df, {"people_covered": int(df["count"].sum())})
+
+
+def _build_first(ds: Dataset) -> dict:
+    rows = [l.split() for l in fetch(ds, ds.url.rsplit("/", 1)[1]).read_text().splitlines() if l.strip()]
+    df = pd.DataFrame({"name": [r[0] for r in rows], "percent": [float(r[1]) for r in rows]})
+    if len(df) < 1000:
+        raise ValueError(f"{ds.name}: unexpected size")
+    return write_processed(ds, df, {})
+
+
+BUILDERS = {"census_surnames": build_census_surnames, "census_first_male": _build_first, "census_first_female": _build_first, "ulb_creditcard": build_ulb, "sms_spam": build_sms, "ofac_sdn": build_ofac, "ofac_alt": build_ofac_alt}
 
 
 def build(name: str) -> dict:

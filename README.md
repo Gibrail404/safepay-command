@@ -28,7 +28,7 @@ cd .. && python -m pytest -q                         # unit tests plus tests on 
 docker compose up -d db                                   # PostgreSQL 16 on localhost:5433 (development password, localhost only)
 export DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@127.0.0.1:5433/safepay_test
 export SAFEPAY_TENANTS="demo:replace-with-your-own-key"   # tenant:key pairs
-PYTHONPATH=kernel uvicorn --factory safepay.api:create_app --port 8000
+PYTHONPATH=kernel:ml:screening uvicorn --factory safepay.api:create_app --port 8000
 # tests: SQLite by default, PostgreSQL (including the concurrency tests) with:
 SAFEPAY_TEST_DATABASE_URL=$DATABASE_URL python -m pytest tests/kernel -q
 ```

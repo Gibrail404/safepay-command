@@ -27,6 +27,34 @@ datasets:
     format: csv
     licence_note: "Official US Treasury publication. Public-domain status NOT confirmed: read OFAC's terms before publishing derived data."
     caveat: "Changes over time: store the download date and hash with every use."
+  ofac_alt:
+    title: "OFAC SDN alternate names (aliases, a.k.a., f.k.a., n.k.a.)"
+    role: "aliases for payee / name screening; each row links to an SDN entry by ent_num"
+    url: "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/ALT.CSV"
+    format: csv
+    licence_note: "Official US Treasury publication, same terms as the SDN list. Public-domain status NOT confirmed."
+    caveat: "Changes over time: store the download date and hash with every use."
+  census_surnames:
+    title: "US Census 2010 surnames (frequency file)"
+    role: "real non-sanctioned surnames, to measure false matches in screening"
+    url: "https://www2.census.gov/topics/genealogy/2010surnames/names.zip"
+    format: zip
+    licence_note: "US Census Bureau publication (US government work). Terms not re-read here: confirm before publishing derived data."
+    caveat: "US population only; the sanctions list is mostly non-US names, so false-match rates on this list are optimistic for those names."
+  census_first_male:
+    title: "US Census 1990 male first names (frequency file)"
+    role: "real non-sanctioned first names, to measure false matches in screening"
+    url: "https://www2.census.gov/topics/genealogy/1990surnames/dist.male.first"
+    format: txt
+    licence_note: "US Census Bureau publication (US government work). Terms not re-read here."
+    caveat: "US population only, 1990."
+  census_first_female:
+    title: "US Census 1990 female first names (frequency file)"
+    role: "real non-sanctioned first names, to measure false matches in screening"
+    url: "https://www2.census.gov/topics/genealogy/1990surnames/dist.female.first"
+    format: txt
+    licence_note: "US Census Bureau publication (US government work). Terms not re-read here."
+    caveat: "US population only, 1990."
   elliptic:
     title: "Elliptic Data Set (labelled Bitcoin transaction graph)"
     role: "real graph for ring / case-grouping detection (v3)"

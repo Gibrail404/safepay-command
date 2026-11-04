@@ -61,9 +61,10 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     store = PolicyStore(settings.policy_dir)
     registry = registry or ToolRegistry()
     try:
-        from . import risk_tool, text_tool
+        from . import risk_tool, screening_tool, text_tool
         risk_tool.register_if_available(registry)
         text_tool.register_if_available(registry)
+        screening_tool.register_if_available(registry)
     except ImportError:                       # the ml package is optional for the kernel
         pass
     decisions = DecisionService(sf, store.for_workload)
