@@ -165,3 +165,17 @@ def test_reports_are_listed_with_provenance_and_unknown_names_are_refused(client
     assert client.get("/v1/reports/graph").status_code == 401
     if names["graph"]["available"]:
         assert "Graph evaluation" in client.get("/v1/reports/graph", headers=A).json()["markdown"]
+
+
+def test_a_missing_optional_package_for_one_tool_does_not_hide_the_others(monkeypatch):
+    """Regression: in the container the risk tool's package was absent and that hid the screening tool as well."""
+    import safepay.risk_tool as risk
+    from fastapi.testclient import TestClient as TC
+    monkeypatch.setattr(risk, "register_if_available", lambda registry, *a, **k: (_ for _ in ()).throw(ImportError("safepay_ml not installed")))
+    fresh_engine().dispose()
+    c = TC(create_app(Settings(database_url=TEST_DB_URL, tenants={"key-a": "tenant_a"})))
+    names = [t["name"] for t in c.get("/v1/tools", headers=A).json()]
+    from safepay import screening_tool
+    from safepay_screening.data import PROCESSED
+    if screening_tool.BANDS_PATH.exists() and (PROCESSED / "ofac_alt.parquet").exists():
+        assert "screen_name" in names

@@ -11,6 +11,8 @@ export class ApiError extends Error {
 
 function friendly(status: number, detail: unknown): string {
   if (status === 401) return "The API key was not accepted. Check it in the connection settings.";
+  if (status === 403) return "Your role does not allow this action.";
+  if (status === 429) return "Too many requests. Wait a moment and try again.";
   if (status === 404) return "Not found.";
   if (status === 409) return typeof detail === "string" ? detail : "That conflicts with something already recorded.";
   if (status === 422 || status === 400) return typeof detail === "string" ? detail : "The request was not valid.";

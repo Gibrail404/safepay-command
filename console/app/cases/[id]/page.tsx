@@ -17,13 +17,13 @@ function Sentence({ text, evidence }: { text: string; evidence: Investigation["e
 }
 
 function Investigator({ id, inv, onDone }: { id: string; inv: Investigation | null; onDone: () => void }) {
-  const { cfg } = useConfig();
+  const { cfg, canAct } = useConfig();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const run = async () => { setBusy(true); setErr(null); try { await call(cfg, `/v1/cases/${id}/investigate`, { method: "POST" }); onDone(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } };
   const how = !inv ? null : inv.path === "llm" ? `Written by an AI model (${inv.model})` : inv.path === "rule" ? "Fixed rule, no AI used: the evidence was too thin" : "Safe plain-text summary: the AI reply did not pass the fact check, or no AI was available";
   return (
-    <Card title="Investigation summary" aside={<button type="button" className="btn" onClick={run} disabled={busy}>{busy ? "Working…" : inv ? "Run again" : "Run investigation"}</button>}>
+    <Card title="Investigation summary" aside={<button type="button" className="btn" onClick={run} disabled={busy || !canAct} title={canAct ? undefined : "Your role is read-only"}>{busy ? "Working…" : inv ? "Run again" : "Run investigation"}</button>}>
       {err && <ErrorBox message={err} />}
       {!inv ? <p className="muted">No summary yet. The summary is written from structured facts only and every sentence cites the fact it uses. It can raise a case&apos;s priority but never lower or close it.</p> : (
         <>
@@ -36,7 +36,7 @@ function Investigator({ id, inv, onDone }: { id: string; inv: Investigation | nu
 }
 
 function Decision({ c, onDone }: { c: CaseDetail; onDone: () => void }) {
-  const { cfg } = useConfig();
+  const { cfg, canAct } = useConfig();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -62,11 +62,12 @@ function Decision({ c, onDone }: { c: CaseDetail; onDone: () => void }) {
   return (
     <Card title="Your decision">
       {err && <ErrorBox message={err} />}
+      {!canAct && <p className="muted">Your role is read-only, so you can look but not decide.</p>}
       <label className="stack">Note (optional, kept in the audit trail)<textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} /></label>
       <div className="row">
-        <button type="button" className="btn danger" disabled={busy} onClick={() => send("confirmed_illicit", "Record this case as confirmed illicit? This also records a label for each alert and cannot be changed.")}>Confirm illicit</button>
-        <button type="button" className="btn" disabled={busy} onClick={() => send("dismissed_licit", "Dismiss this case as licit? This also records a label for each alert and cannot be changed.")}>Dismiss as licit</button>
-        <button type="button" className="btn" disabled={busy} onClick={() => send("escalated", "Escalate this case? No labels are recorded.")}>Escalate</button>
+        <button type="button" className="btn danger" disabled={busy || !canAct} onClick={() => send("confirmed_illicit", "Record this case as confirmed illicit? This also records a label for each alert and cannot be changed.")}>Confirm illicit</button>
+        <button type="button" className="btn" disabled={busy || !canAct} onClick={() => send("dismissed_licit", "Dismiss this case as licit? This also records a label for each alert and cannot be changed.")}>Dismiss as licit</button>
+        <button type="button" className="btn" disabled={busy || !canAct} onClick={() => send("escalated", "Escalate this case? No labels are recorded.")}>Escalate</button>
       </div>
     </Card>
   );

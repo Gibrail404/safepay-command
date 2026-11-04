@@ -1,0 +1,247 @@
+{
+  "runs": {
+    "1 server process": {
+      "seconds": 8.0,
+      "endpoints": {
+        "health check (no database)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 9771,
+            "errors": {},
+            "requests_per_second": 1221.3235644165106,
+            "p50_ms": 0.79691599967191,
+            "p95_ms": 0.9467494983255165,
+            "p99_ms": 1.159203600036561
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 14864,
+            "errors": {},
+            "requests_per_second": 1857.4430090291473,
+            "p50_ms": 3.860458500639652,
+            "p95_ms": 4.531814401161682,
+            "p99_ms": 9.06294745942426
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 4473,
+            "errors": {},
+            "requests_per_second": 557.3370395084436,
+            "p50_ms": 37.578792002022965,
+            "p95_ms": 177.78523319939248,
+            "p99_ms": 288.7958502396938
+          }
+        ],
+        "list cases (database read)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 1050,
+            "errors": {},
+            "requests_per_second": 131.15369358053212,
+            "p50_ms": 7.533771000453271,
+            "p95_ms": 10.62728490178415,
+            "p99_ms": 13.346220340827129
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 3782,
+            "errors": {},
+            "requests_per_second": 471.9245253707477,
+            "p50_ms": 16.136311998707242,
+            "p95_ms": 23.562316648713022,
+            "p99_ms": 28.82081326923072
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 2646,
+            "errors": {},
+            "requests_per_second": 326.4832297666612,
+            "p50_ms": 70.45962550000695,
+            "p95_ms": 264.02235375189775,
+            "p99_ms": 431.58918969984506
+          }
+        ],
+        "decision (database write and ledger append)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 1047,
+            "errors": {},
+            "requests_per_second": 130.79572825697826,
+            "p50_ms": 7.368208000116283,
+            "p95_ms": 10.489541199785885,
+            "p99_ms": 15.407720179209717
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 3542,
+            "errors": {},
+            "requests_per_second": 442.0501907849865,
+            "p50_ms": 17.477729001257103,
+            "p95_ms": 25.709996448313177,
+            "p99_ms": 33.77352966115724
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 3446,
+            "errors": {},
+            "requests_per_second": 427.76843837111164,
+            "p50_ms": 61.69945800138521,
+            "p95_ms": 129.74703099826002,
+            "p99_ms": 154.86887285151172
+          }
+        ],
+        "name screening (matcher, a few ms of CPU)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 576,
+            "errors": {},
+            "requests_per_second": 71.92469372182705,
+            "p50_ms": 14.091916500547086,
+            "p95_ms": 16.834416751407844,
+            "p99_ms": 18.235479501527152
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 2095,
+            "errors": {},
+            "requests_per_second": 261.24764913693105,
+            "p50_ms": 29.81483300027321,
+            "p95_ms": 37.066825100191636,
+            "p99_ms": 49.917955000928394
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 2071,
+            "errors": {},
+            "requests_per_second": 256.38652971274445,
+            "p50_ms": 129.13108299835585,
+            "p95_ms": 185.15185450087301,
+            "p99_ms": 218.45856250038202
+          }
+        ]
+      }
+    },
+    "4 server processes": {
+      "seconds": 8.0,
+      "endpoints": {
+        "health check (no database)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 9761,
+            "errors": {},
+            "requests_per_second": 1220.0820874253682,
+            "p50_ms": 0.7938329981698189,
+            "p95_ms": 0.9500830019533169,
+            "p99_ms": 1.2266083991562466
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 10625,
+            "errors": {},
+            "requests_per_second": 1327.685743469932,
+            "p50_ms": 3.899125000316417,
+            "p95_ms": 5.046824999590155,
+            "p99_ms": 15.116923918394605
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 4493,
+            "errors": {},
+            "requests_per_second": 559.5214877093551,
+            "p50_ms": 36.3529579990427,
+            "p95_ms": 181.22054119812648,
+            "p99_ms": 288.7348746425414
+          }
+        ],
+        "list cases (database read)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 1134,
+            "errors": {},
+            "requests_per_second": 141.71913695547548,
+            "p50_ms": 6.744979000359308,
+            "p95_ms": 10.310144299910458,
+            "p99_ms": 13.049231250952339
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 5731,
+            "errors": {},
+            "requests_per_second": 715.823785888739,
+            "p50_ms": 10.958499999105697,
+            "p95_ms": 16.556083000978106,
+            "p99_ms": 21.67288380151148
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 2685,
+            "errors": {},
+            "requests_per_second": 333.3721853679383,
+            "p50_ms": 66.58566699843504,
+            "p95_ms": 286.074433800968,
+            "p99_ms": 427.55385884054596
+          }
+        ],
+        "decision (database write and ledger append)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 1004,
+            "errors": {},
+            "requests_per_second": 125.39376992485221,
+            "p50_ms": 7.8275000014400575,
+            "p95_ms": 11.261056250987167,
+            "p99_ms": 12.834513019843149
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 3854,
+            "errors": {},
+            "requests_per_second": 481.2064421954358,
+            "p50_ms": 16.43341649833019,
+            "p95_ms": 25.27739999950427,
+            "p99_ms": 29.779769489578012
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 3612,
+            "errors": {},
+            "requests_per_second": 448.6667605426522,
+            "p50_ms": 42.57527099980507,
+            "p95_ms": 171.37341685047429,
+            "p99_ms": 207.44091499927887
+          }
+        ],
+        "name screening (matcher, a few ms of CPU)": [
+          {
+            "concurrency": 1,
+            "ok_requests": 1476,
+            "errors": {},
+            "requests_per_second": 184.48071023574929,
+            "p50_ms": 5.2603545009333175,
+            "p95_ms": 7.249051498547487,
+            "p99_ms": 8.653917001538503
+          },
+          {
+            "concurrency": 8,
+            "ok_requests": 4451,
+            "errors": {},
+            "requests_per_second": 555.5266875549777,
+            "p50_ms": 14.150625000183936,
+            "p95_ms": 25.58727049836307,
+            "p99_ms": 32.21452050092921
+          },
+          {
+            "concurrency": 32,
+            "ok_requests": 3508,
+            "errors": {},
+            "requests_per_second": 435.7645268024882,
+            "p50_ms": 25.384957998539903,
+            "p95_ms": 217.29665274997384,
+            "p99_ms": 283.5568626305391
+          }
+        ]
+      }
+    }
+  },
+  "machine": "macOS-26.5.2-arm64-arm-64bit-Mach-O, 8 CPU cores, Python 3.14.7"
+}

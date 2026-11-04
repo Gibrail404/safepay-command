@@ -183,3 +183,24 @@ def test_the_system_prompt_carries_the_schema_and_no_customer_text():
     p = FakeProvider([OK])
     ask(gw(p), "SECRET-CUSTOMER-TEXT")
     assert "JSON Schema" in p.seen[0]["system"] and "SECRET-CUSTOMER-TEXT" not in p.seen[0]["system"]
+
+
+# ---------------- names and addresses (optional NER layer) ----------------
+def test_loading_the_ner_layer_does_not_pull_torch_into_the_process():
+    import subprocess, sys as _sys
+    code = "import sys; sys.path[:0]=['kernel']; from safepay.llm import ner; ner.available(); import lightgbm; print('torch' in sys.modules)"
+    out = subprocess.run([_sys.executable, "-c", code], capture_output=True, text=True, cwd=str(__import__('pathlib').Path(__file__).resolve().parents[2]))
+    assert out.returncode == 0 and out.stdout.strip().endswith("False"), out.stderr[-300:]
+
+
+def test_street_addresses_and_po_boxes_are_redacted_without_the_model():
+    r = redact("send it to 12 Baker Street or PO Box 4421", use_ner=False)
+    assert "Baker" not in r.text and "4421" not in r.text and r.count == 2
+
+
+def test_names_are_redacted_when_the_ner_layer_is_available():
+    from safepay.llm import ner
+    if not ner.available():
+        pytest.skip("spaCy model not installed")
+    r = redact("My landlord Ahmed Al-Rashid asked me to pay rent")
+    assert "Ahmed" not in r.text and "[NAME_1]" in r.text and redact("I will pay 4800 AED on 12 March").count == 0

@@ -7,4 +7,4 @@ export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://safepay:safepay_dev_on
 export SAFEPAY_TENANTS="${SAFEPAY_TENANTS:-demo:demo-key}"
 export SAFEPAY_CORS_ORIGINS="${SAFEPAY_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
 export PYTHONPATH=kernel:ml:screening:lab
-exec .venv/bin/uvicorn --factory safepay.api:create_app --port 8000
+exec .venv/bin/uvicorn --factory safepay.api:create_app --port 8000 --workers "${UVICORN_WORKERS:-1}"

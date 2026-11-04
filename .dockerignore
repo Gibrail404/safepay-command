@@ -1,0 +1,13 @@
+.git
+.venv
+.claude
+console
+models
+data/raw
+data/processed
+**/__pycache__
+**/*.pyc
+tests
+scripts
+docs/*.md
+.env

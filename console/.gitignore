@@ -3,3 +3,5 @@ node_modules
 next-env.d.ts
 AGENTS.md
 tsconfig.tsbuildinfo
+test-results
+playwright-report

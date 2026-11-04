@@ -120,6 +120,14 @@ class LabelRow(Base):
     ts: Mapped[str] = mapped_column(String(40))
 
 
+class LlmUsageRow(Base):
+    """Daily LLM usage shared by every server process, so a restart or a second instance cannot reset the spending cap."""
+    __tablename__ = "llm_usage"
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+    tokens: Mapped[int] = mapped_column(Integer, default=0)
+
+
 def make_engine(url: str = "sqlite+pysqlite:///:memory:"):
     if url.startswith("sqlite") and ":memory:" in url:
         return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)

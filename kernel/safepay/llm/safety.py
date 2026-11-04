@@ -4,6 +4,7 @@ has no tools, its output is schema-validated, and the policy engine decides."""
 from __future__ import annotations
 import re, unicodedata
 from dataclasses import dataclass, field
+from . import ner
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 EMIRATES_ID = re.compile(r"\b784[-\s]?\d{4}[-\s]?\d{7}[-\s]?\d\b")
@@ -38,7 +39,7 @@ class Redaction:
         return len(self.mapping)
 
 
-def redact(text: str) -> Redaction:
+def redact(text: str, use_ner: bool = True) -> Redaction:
     text = normalise(text)
     mapping: dict[str, str] = {}
 
@@ -63,6 +64,8 @@ def redact(text: str) -> Redaction:
     out = EMIRATES_ID.sub(lambda m: put("ID", m.group(0)), out)
     out = IBAN.sub(lambda m: put("IBAN", m.group(0)), out)
     out = LONG_DIGITS.sub(digits_sub, out)
+    for st, en, kind in reversed(ner.spans(out, with_model=use_ner)):      # street addresses always; people's names when the spaCy model is installed (silently off otherwise)
+        out = out[:st] + put(kind, out[st:en]) + out[en:]
     return Redaction(out, mapping)
 
 

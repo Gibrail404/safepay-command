@@ -97,5 +97,5 @@ def test_screen_name_tool_returns_band_and_hits_from_the_real_list():
     if not st.BANDS_PATH.exists():
         pytest.skip("bands not generated")
     out = st.screen_name(st.ScreenInput(name="Ayman Zawahiri"))
-    assert out["screen_band"] == "strong" and out["hits"][0]["ent_num"] and out["list_version"]
+    assert out["screen_band"] == "strong" and out["hits"][0]["ent_num"] and out["list_version"] and isinstance(out["thresholds_tuned_on_this_list"], bool)
     assert st.screen_name(st.ScreenInput(name="Sarah Johnson"))["screen_band"] == "none"

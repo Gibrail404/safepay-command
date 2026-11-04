@@ -37,7 +37,9 @@ def _load(bands_path: Path):
     if _Cache.key != key:
         sdn = load_sdn()
         _Cache.index = NameIndex(primary_rows(sdn) + alias_rows(load_aliases()), fold_level=bands["fold_level"])
-        _Cache.meta = {"bands": bands, "entries": {e: {"sdn_type": t, "program": p} for e, t, p in zip(sdn["ent_num"], sdn["sdn_type"], sdn["program"])}}
+        from safepay_screening.data import PROCESSED
+        loaded = json.loads((PROCESSED / "ofac_sdn.manifest.json").read_text())["source_sha256"]
+        _Cache.meta = {"bands": bands, "loaded_list_sha256": loaded, "entries": {e: {"sdn_type": t, "program": p} for e, t, p in zip(sdn["ent_num"], sdn["sdn_type"], sdn["program"])}}
         _Cache.key = key
     return _Cache.index, _Cache.meta
 
@@ -46,7 +48,8 @@ def screen_name(args: BaseModel, bands_path: Path = BANDS_PATH) -> dict:
     index, meta = _load(bands_path)
     hits = index.search(args.name, top=3)
     top = hits[0].score if hits else 0.0
-    return {"screen_band": band_for(top, meta["bands"]), "top_score": top, "list_version": meta["bands"]["list_sha256"][:12],
+    loaded, tuned = meta["loaded_list_sha256"], meta["bands"]["list_sha256"]
+    return {"screen_band": band_for(top, meta["bands"]), "top_score": top, "list_version": loaded[:12], "thresholds_tuned_on_this_list": loaded == tuned,
             "hits": [{"ent_num": h.ent_num, "matched_name": h.matched_name, "is_alias": h.is_alias, "score": h.score, **meta["entries"].get(h.ent_num, {})} for h in hits]}
 
 

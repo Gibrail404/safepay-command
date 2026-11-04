@@ -1,6 +1,6 @@
 """HTTP API (v1). Tenant comes from the API key, never from a client-supplied field."""
 from __future__ import annotations
-import hmac, json, re, uuid
+import hmac, json, re, threading, time, uuid
 from pathlib import Path
 from typing import Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -10,8 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from . import cases as case_svc, ledger
 from .agents.investigator import investigate
-from .llm.gateway import Budget, LLMGateway
-from .config import PolicyStore, Settings
+from .llm.budget_db import DbBudget
+from .llm.gateway import LLMGateway
+from .config import ROLE_RANK, PolicyStore, Settings
 from .db import DecisionRow, EventRow, init_db, make_engine
 from .decisions import DecisionRequest, DecisionResponse, DecisionService, IdempotencyConflict, NotFound, PolicyIntegrityError, ReplayResult
 from .policy import Policy, evaluate
@@ -78,13 +79,11 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     sf = init_db(engine)
     store = PolicyStore(settings.policy_dir)
     registry = registry or ToolRegistry()
-    try:
-        from . import risk_tool, screening_tool, text_tool
-        risk_tool.register_if_available(registry)
-        text_tool.register_if_available(registry)
-        screening_tool.register_if_available(registry)
-    except ImportError:                       # the ml package is optional for the kernel
-        pass
+    for module in ("risk_tool", "text_tool", "screening_tool"):           # each optional tool is registered on its own: a missing package for one must not hide the others
+        try:
+            __import__(f"{__package__}.{module}", fromlist=["register_if_available"]).register_if_available(registry)
+        except ImportError:
+            pass
     decisions = DecisionService(sf, store.for_workload)
     gateway = ToolGateway(sf, registry, settings.capability_secret)
     app = FastAPI(title="SafePay Command kernel", version="0.3.0")
@@ -94,7 +93,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     if llm is None:
         from .llm.providers import OllamaCloudProvider
         chain = [OllamaCloudProvider(settings.ollama_api_key, m) for m in ("gemma4:31b", "deepseek-v4.1-flash")] if settings.ollama_api_key else []
-        llm = LLMGateway(chain, budget=Budget(max_requests_per_day=400, max_tokens_per_day=400_000, max_requests_per_run=6), timeout_s=12.0, deadline_s=24.0)
+        llm = LLMGateway(chain, budget=DbBudget(sf, max_requests_per_day=400, max_tokens_per_day=400_000, max_requests_per_run=6), timeout_s=12.0, deadline_s=24.0)
 
     @app.middleware("http")
     async def limit_body(request, call_next):
@@ -104,14 +103,52 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return await call_next(request)
     app.state.sf = sf                       # exposed so tests can reach the database directly
 
-    def tenant_of(x_api_key: str | None = Header(default=None)) -> str:
-        tenant = None
+    class _Limiter:
+        """Token bucket per API key, in this process. With several instances the effective limit is per instance; a shared limiter belongs at the proxy."""
+        def __init__(self, rate: float, burst: int):
+            self.rate, self.burst, self.state, self.lock = rate, burst, {}, threading.Lock()
+
+        def wait_needed(self, key: str) -> float:
+            if self.rate <= 0:
+                return 0.0
+            now = time.monotonic()
+            with self.lock:
+                tokens, last = self.state.get(key, (float(self.burst), now))
+                tokens = min(float(self.burst), tokens + (now - last) * self.rate)
+                if tokens < 1.0:
+                    self.state[key] = (tokens, now)
+                    return (1.0 - tokens) / self.rate
+                self.state[key] = (tokens - 1.0, now)
+                return 0.0
+
+    limiter = _Limiter(settings.rate_per_s, settings.rate_burst)
+
+    def principal(x_api_key: str | None) -> tuple[str, str]:
+        tenant, matched = None, ""
         for known, t in settings.tenants.items():          # constant-time comparison so response time does not reveal how much of a key matched
             if hmac.compare_digest(known.encode(), (x_api_key or "").encode()):
-                tenant = t
+                tenant, matched = t, known
         if tenant is None:
             raise HTTPException(401, "missing or unknown API key")
-        return tenant
+        wait = limiter.wait_needed(matched)
+        if wait > 0:
+            raise HTTPException(429, "too many requests", headers={"Retry-After": str(max(1, int(wait + 0.999)))})
+        return tenant, settings.roles.get(matched, "admin")
+
+    def auth(minimum: str):
+        def dep(x_api_key: str | None = Header(default=None)) -> str:
+            tenant, role = principal(x_api_key)
+            if ROLE_RANK[role] < ROLE_RANK[minimum]:
+                raise HTTPException(403, f"this action needs the {minimum} role")
+            return tenant
+        return dep
+
+    tenant_of, analyst_of, admin_of = auth("viewer"), auth("analyst"), auth("admin")
+
+    @app.get("/v1/whoami")
+    def whoami(x_api_key: str | None = Header(default=None)):
+        tenant, role = principal(x_api_key)
+        return {"tenant": tenant, "role": role}
 
     def need_key(idempotency_key: str | None) -> str:
         if not idempotency_key or not KEY_FORMAT.match(idempotency_key):
@@ -123,7 +160,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return {"ok": True}
 
     @app.post("/v1/events")
-    def post_event(body: EventIn, tenant: str = Depends(tenant_of), idempotency_key: str | None = Header(default=None)):
+    def post_event(body: EventIn, tenant: str = Depends(analyst_of), idempotency_key: str | None = Header(default=None)):
         key = need_key(idempotency_key)
         data_json = ledger.canonical_json(body.model_dump())
         h = ledger.sha256_hex(data_json)
@@ -142,7 +179,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
             raise HTTPException(409, "concurrent request with the same idempotency key")
 
     @app.post("/v1/decisions", response_model=DecisionResponse)
-    def post_decision(body: DecisionRequest, tenant: str = Depends(tenant_of), idempotency_key: str | None = Header(default=None)):
+    def post_decision(body: DecisionRequest, tenant: str = Depends(analyst_of), idempotency_key: str | None = Header(default=None)):
         key = need_key(idempotency_key)
         try:
             decision, _ = decisions.decide(tenant, key, body)
@@ -203,7 +240,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
 
     # ---------------- cases, investigation, dispositions, labels ----------------
     @app.post("/v1/cases/import")
-    def import_cases(body: case_svc.ImportIn, tenant: str = Depends(tenant_of)):
+    def import_cases(body: case_svc.ImportIn, tenant: str = Depends(admin_of)):
         with sf.begin() as s:
             return case_svc.import_cases(s, tenant, body)
 
@@ -226,7 +263,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
             raise HTTPException(404, "case not found")
 
     @app.post("/v1/cases/{case_id}/investigate")
-    def investigate_case(case_id: str, tenant: str = Depends(tenant_of)):
+    def investigate_case(case_id: str, tenant: str = Depends(analyst_of)):
         try:
             with sf() as s:
                 items = case_svc.case_content(s, tenant, case_id)["items"]
@@ -240,7 +277,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return {**summary.model_dump(), "priority": priority, **meta}
 
     @app.post("/v1/cases/{case_id}/disposition")
-    def disposition_case(case_id: str, body: case_svc.DispositionIn, tenant: str = Depends(tenant_of), x_actor: str | None = Header(default=None)):
+    def disposition_case(case_id: str, body: case_svc.DispositionIn, tenant: str = Depends(analyst_of), x_actor: str | None = Header(default=None)):
         if not x_actor or len(x_actor) > 64:
             raise HTTPException(400, "X-Actor header is required to record who decided (max 64 characters)")
         try:
@@ -258,7 +295,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
 
     # ---------------- generated reports (the UI's metrics pages read these) ----------------
     reports_dir = Path(__file__).resolve().parents[2] / "docs" / "reports"
-    REPORTS = {"risk_model": ("Transaction risk model", "real"), "text_model": ("Scam-text model", "real"), "screening": ("Name screening", "real"), "graph": ("Graph and cases", "real"), "flywheel": ("Analyst feedback flywheel", "mixed"), "investigator": ("Investigator summaries", "mixed"),
+    REPORTS = {"risk_model": ("Transaction risk model", "real"), "text_model": ("Scam-text model", "real"), "screening": ("Name screening", "real"), "graph": ("Graph and cases", "real"), "flywheel": ("Analyst feedback flywheel", "mixed"), "investigator": ("Investigator summaries", "mixed"), "redaction": ("Name and address redaction", "mixed"), "load": ("Local load test", "simulated"),
                "decision_lab": ("Decision Lab", "simulated"), "uplift": ("Uplift", "simulated"), "sandbox": ("Questioner under pressure", "simulated"), "llm_eval": ("LLM provider evaluation", "mixed")}
 
     @app.get("/v1/reports")
@@ -277,7 +314,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return registry.describe()
 
     @app.post("/v1/runs")
-    def start_run(body: RunIn, tenant: str = Depends(tenant_of)):
+    def start_run(body: RunIn, tenant: str = Depends(analyst_of)):
         unknown = [t for t in body.tools if registry.get(t) is None]
         if unknown:
             raise HTTPException(422, f"unknown tools: {unknown}")
@@ -287,7 +324,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return {"run_id": run_id, "capability": mint_capability(settings.capability_secret, tenant, run_id, body.tools, body.ttl_s)}
 
     @app.post("/v1/tools/call", response_model=CallResult)
-    def call_tool(body: ToolCallIn, tenant: str = Depends(tenant_of), x_capability: str | None = Header(default=None), idempotency_key: str | None = Header(default=None)):
+    def call_tool(body: ToolCallIn, tenant: str = Depends(analyst_of), x_capability: str | None = Header(default=None), idempotency_key: str | None = Header(default=None)):
         key = need_key(idempotency_key)
         pre = False
         if body.decision_id:
@@ -303,7 +340,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return gateway.list_approvals(tenant, status)
 
     @app.post("/v1/approvals/{approval_id}/decision")
-    def decide(approval_id: str, body: ApprovalIn, tenant: str = Depends(tenant_of), x_actor: str | None = Header(default=None)):
+    def decide(approval_id: str, body: ApprovalIn, tenant: str = Depends(analyst_of), x_actor: str | None = Header(default=None)):
         if not x_actor:
             raise HTTPException(400, "X-Actor header is required to record who decided")
         try:
