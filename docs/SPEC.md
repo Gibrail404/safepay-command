@@ -29,7 +29,7 @@ Fintechs process huge payment volumes. Scammers coach victims to lie, so a simpl
 
 1. Ingest payment events with idempotency keys.
 2. Risk scoring: calibrated ML model plus deterministic rules.
-3. Interception: Interviewer step asks at most three adaptive questions; a deterministic policy engine decides allow, warn, hold or block; Explainer step writes the plain-language reason, every fact tied to an evidence id.
+3. Interception: Questioner step asks at most three adaptive questions; a deterministic policy engine decides allow, warn, hold or block; Explainer step writes the plain-language reason, every fact tied to an evidence id.
 4. Screening: algorithmic candidate matching against OFAC, an adjudicator step explains hits, humans clear high-risk ones.
 5. Case generation: related alerts grouped by graph clusters and shared entities.
 6. AI-assisted investigation: Investigator step summarises the case with citations and may abstain.
@@ -45,7 +45,7 @@ Process = workflow run; system call = tool call through the Tool Gateway with a 
 
 Layers: L0 connectors, L1 ledger and state (PII vault), L2 policy and capability kernel, L3 model gateway (ML and LLM routing, redaction, injection screening, structured outputs, budgets, registry), L4 agent runtime (state machines, idempotency, approvals), L5 assurance, L6 control plane (APIs, SSE, console), L7 workloads packaged as skills.
 
-Agents (LLM steps with schemas): Interviewer, Explainer, Investigator, Screening adjudicator. Test-only sandbox agents: scammer, victim, red-team. Not agents: risk model, candidate matcher, policy engine, faithfulness checker.
+Agents (LLM steps with schemas): Questioner, Explainer, Investigator, Screening adjudicator. Test-only sandbox agents: scammer, victim, red-team. Not agents: risk model, candidate matcher, policy engine, faithfulness checker.
 Skills: `payment-risk-interception`, `payee-screening`, `case-investigation`.
 
 APIs (OpenAPI is the source of truth; full detail in `docs/HARNESS.md`): `/v1/events`, `/v1/decisions` (+`/replay`), `/v1/cases`, `/v1/runs`, `/v1/approvals`, `/v1/tools`, `/v1/policies` (+`/simulate`), `/v1/models`, `/v1/evals`, `/v1/audit` (+`/verify`), `/v1/connectors`, plus `/v1/screenings`, `/v1/graph/clusters`, `/v1/labels`, `/v1/experiments`, `/v1/simulations`, and an SSE stream.
@@ -75,7 +75,7 @@ No Kafka until a measured throughput need appears. Early risk: local Python is 3
 
 ### LLM in the deployed demo (decision 2026-11-04, provider order recommended, pending the owner's key)
 
-Visitors, interviewers and engineers use the demo online, and its Interviewer and Explainer steps run on a real LLM. The model gateway has one interface and these providers:
+Visitors, recruiters and engineers use the demo online, and its Questioner and Explainer steps run on a real LLM. The model gateway has one interface and these providers:
 
 1. **Gemini API (recommended primary).** It supports JSON-schema constrained output natively, so replies are valid JSON by construction. Free-of-charge models listed in Google's pricing page on 2026-11-04 include `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` and `gemini-2.5-flash-lite`; `gemini-4-argon` is not free. Model ids and plans change quickly (for example `gemini-2.5-flash` and `gemini-2.5-pro` are deprecated and route to newer models from 2026-12-01), so the model is an environment variable and is chosen by the project's own evaluation. The key is `GEMINI_API_KEY`, created in Google AI Studio.
 2. **Ollama Cloud** (`https://ollama.com`, `OLLAMA_API_KEY`). It does not support structured outputs today, so replies are validated and retried. Kept as a second provider and a comparison point.
@@ -88,7 +88,7 @@ Measured on 2026-11-04 with the owner's key (`scripts/check_llm_providers.py`, o
 
 First measured check of Ollama Cloud (2026-11-04, owner's key, one call per cell, so a first look and not a benchmark): the key lists 25 cloud models, including `gemma4:31b`, `gpt-oss:20b`, `deepseek-v4.1-flash` and `nemotron-3-nano:30b`. Ollama Cloud ignored the `format` JSON schema in every case (the model answered in prose), which matches its documentation. With a prompt that says "reply with ONLY a JSON object with keys ...", all four models returned schema-valid JSON: `deepseek-v4.1-flash` in about 1.1 s, `gemma4:31b` in 1.5 s, `gpt-oss:20b` in 2.1 s and `nemotron-3-nano:30b` in 5.5 s. Provisional provider order after the first look (superseded by the M2d-2 evaluation below), to be settled by the project's own evaluation (many prompts per model; schema-valid rate, latency p50 and p95, error rate, unsupported-claim rate): Ollama Cloud (`gemma4:31b` or `deepseek-v4.1-flash`, prompt-only JSON plus Pydantic validation and one retry) as primary for latency, Gemini (`gemini-3.6-flash`, native schema) as second, then the deterministic fallback. Both providers need a timeout, bounded retries, and a fallback chain.
 
-Provider chain decided by the project's own evaluation (M2d-2, `docs/reports/llm_eval.md`, one run, 30 payment decisions from real ULB test-period transactions plus 40 simulated customer answers, production gateway settings): `gemma4:31b` on Ollama Cloud produced valid, faithful Explainer output on the first try for all 30 cases and an accepted Interviewer reply for all 40, in about 1.8 s; `deepseek-v4.1-flash` needed repairs more often; `gpt-oss:20b` failed the Interviewer schema every time; `gemini-3.6-flash` on the free tier was rate limited or unavailable under this load (429 on all Interviewer calls). Chain: `gemma4:31b`, then `deepseek-v4.1-flash`, then `gemini-3.6-flash` for redacted or synthetic text only, then the deterministic template. Models come from environment variables.
+Provider chain decided by the project's own evaluation (M2d-2, `docs/reports/llm_eval.md`, one run, 30 payment decisions from real ULB test-period transactions plus 40 simulated customer answers, production gateway settings): `gemma4:31b` on Ollama Cloud produced valid, faithful Explainer output on the first try for all 30 cases and an accepted Questioner reply for all 40, in about 1.8 s; `deepseek-v4.1-flash` needed repairs more often; `gpt-oss:20b` failed the Questioner schema every time; `gemini-3.6-flash` on the free tier was rate limited or unavailable under this load (429 on all Questioner calls). Chain: `gemma4:31b`, then `deepseek-v4.1-flash`, then `gemini-3.6-flash` for redacted or synthetic text only, then the deterministic template. Models come from environment variables.
 
 Data-use warning: on Gemini's free tier, Google states that content may be used to improve its products; on the paid tier it is not. The demo therefore sends only synthetic or public data, redacts personal data in the gateway before any call, and shows a notice not to enter real personal information. If real visitor traffic is expected, either enable paid billing with a low cap or keep the notice and redaction.
 
@@ -165,7 +165,7 @@ Rendering and "no fake data" rules: UI reads only from the API; no mock JSON; ra
 
 - M0 Foundations: done (spec, data register, real-data pipeline, 8 tests).
 - M1 Kernel (DONE 2026-11-04): hash-chained ledger and verify, `/v1/events`, `/v1/decisions`, policy engine, tool gateway, idempotency, OpenAPI, CI. Exit: invariants 1, 2, 3, 6, 7 pass; replay reproduces outcomes.
-- M2 Risk and interception (risk model, text model and tools DONE 2026-11-04; model gateway, agents and faithfulness checker still to do): ULB model with calibration and the PyTorch comparison, SMS model, model registry, Interviewer and Explainer, faithfulness checker, injection tests. Exit: generated metrics table; first shareable demo for the referrer.
+- M2 Risk and interception (risk model, text model and tools DONE 2026-11-04; model gateway, agents and faithfulness checker still to do): ULB model with calibration and the PyTorch comparison, SMS model, model registry, Questioner and Explainer, faithfulness checker, injection tests. Exit: generated metrics table; first shareable demo for the referrer.
 - M3 Screening: matcher, adjudicator, second skill loaded on the same kernel. Exit: recall and FPR tables with CIs; invariants hold for both workloads.
 - M4 Simulator and Decision Lab: scenario engine, sandbox agents, shadow mode, estimators validated against ground truth. Exit: "naive vs corrected vs truth" figure and measured CI coverage.
 - M5 Workbench, graph and flywheel: cases, Elliptic ring detection, Investigator, console with provenance chips, labels and flywheel experiment. Exit: graph metrics, unsupported-claim rate, UI renders only live data.

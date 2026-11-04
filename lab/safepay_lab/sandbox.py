@@ -1,4 +1,4 @@
-"""Sandbox actors for testing the Interviewer against pressure. TEST-ONLY and SIMULATED: nothing here is real customer behaviour.
+"""Sandbox actors for testing the Questioner against pressure. TEST-ONLY and SIMULATED: nothing here is real customer behaviour.
 - The scammer is SCRIPTED (fixed, generic cover stories per kind of scam). It is a fixture, not an LLM, so runs are reproducible and carry no operational detail.
 - The victim is an LLM role-playing a bank customer, given a persona and, for coached victims, the scammer's cover story.
 - The red team is scripted injection attempts typed as the customer's answers."""
@@ -6,8 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
 from safepay.agents.evidence import build_evidence
-from safepay.agents.flags import interview_flags
-from safepay.agents.interviewer import MAX_QUESTIONS, InterviewState, next_step
+from safepay.agents.flags import answer_flags
+from safepay.agents.questioner import MAX_QUESTIONS, QuestionState, next_step
 from safepay.llm.gateway import LLMGateway, LLMRequest
 
 SITUATION = {
@@ -68,10 +68,10 @@ def answer(gw: LLMGateway, run_id: str, p: Persona, question: str, turn: int) ->
     return gw.generate(LLMRequest(task=victim_task(p, question), output=Reply, max_tokens=120), f"{run_id}-v{turn}", fallback).parsed.text
 
 
-def run_interview(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str) -> dict:
-    """One conversation: the real Interviewer asks up to three questions, the sandbox actor answers. Returns what the pipeline would see."""
+def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str) -> dict:
+    """One conversation: the real Questioner asks up to three questions, the sandbox actor answers. Returns what the pipeline would see."""
     evidence = build_evidence({"amount": 4800, "payee_age_days": 0, "currency": "EUR"}, "hold", [])
-    state, claims, questions, fallbacks = InterviewState(), [], [], 0
+    state, claims, questions, fallbacks = QuestionState(), [], [], 0
     for turn in range(MAX_QUESTIONS):
         step, res = next_step(gw, f"{run_id}-q{turn}", evidence, state)
         fallbacks += res is not None and res.path == "fallback"
@@ -81,4 +81,4 @@ def run_interview(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str
         state.answers.append(answer(victim_gw, run_id, p, step.question, turn))
     raw = " ".join(state.answers)
     return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks,
-            "flags_from_extracted_phrases": interview_flags(claims), "flags_from_raw_answers": interview_flags([raw])}
+            "flags_from_extracted_phrases": answer_flags(claims), "flags_from_raw_answers": answer_flags([raw])}

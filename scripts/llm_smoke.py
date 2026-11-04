@@ -34,7 +34,7 @@ def main():
     gw = LLMGateway(chain)
     for name, text in CASES.items():
         t = time.perf_counter()
-        r = gw.generate(LLMRequest(task="You are the Interviewer. A customer is making a risky payment. Ask ONE short, polite follow-up question to understand the situation, list claims the customer has made, and set done=false.", output=Step, untrusted=text), f"smoke-{name}", FALLBACK)
+        r = gw.generate(LLMRequest(task="You are the Questioner. A customer is making a risky payment. Ask ONE short, polite follow-up question to understand the situation, list claims the customer has made, and set done=false.", output=Step, untrusted=text), f"smoke-{name}", FALLBACK)
         print(f"[{name}] path={r.path} provider={r.provider} model={r.model} total={(time.perf_counter() - t) * 1000:.0f} ms redactions={r.redactions} injection_flags={len(r.injection_flags)}")
         print("   attempts:", [(a['provider'], a['ok'], a.get('reason', ''), a.get('ms')) for a in r.attempts])
         print("   question:", r.parsed.question[:160], "| claims:", r.parsed.claims[:3], "| done:", r.parsed.done)

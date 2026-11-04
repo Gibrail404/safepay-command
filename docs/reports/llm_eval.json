@@ -6,7 +6,7 @@
   },
   "cases": {
     "payments": 30,
-    "interviews": 40,
+    "question_rounds": 40,
     "kinds": "benign 20, pressure 8, pii 6, injection 6"
   },
   "models": [
@@ -57,7 +57,7 @@
           "p95_ms": 1916.9848121990071
         }
       },
-      "interviewer": {
+      "questioner": {
         "n": 40,
         "first_schema_ok": 40,
         "first_check_ok": 40,
@@ -169,7 +169,7 @@
           "p95_ms": 4505.445482999493
         }
       },
-      "interviewer": {
+      "questioner": {
         "n": 40,
         "first_schema_ok": 24,
         "first_check_ok": 23,
@@ -269,7 +269,7 @@
           "p95_ms": 6529.465420898487
         }
       },
-      "interviewer": {
+      "questioner": {
         "n": 40,
         "first_schema_ok": 0,
         "first_check_ok": 0,
@@ -309,7 +309,7 @@
         },
         "latency": null
       },
-      "interviewer": {
+      "questioner": {
         "n": 40,
         "first_schema_ok": 40,
         "first_check_ok": 0,

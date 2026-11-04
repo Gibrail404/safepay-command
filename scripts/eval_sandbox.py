@@ -1,4 +1,4 @@
-"""Runs the real Interviewer against sandbox actors (SIMULATED customers) with a live LLM and writes docs/reports/sandbox.{json,md}.
+"""Runs the real Questioner against sandbox actors (SIMULATED customers) with a live LLM and writes docs/reports/sandbox.{json,md}.
 Usage: python scripts/eval_sandbox.py [--limit N] [--model gemma4:31b]"""
 import argparse, json, math, os, sys, time
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +11,7 @@ from safepay.config import PolicyStore
 from safepay.llm.gateway import Budget, LLMGateway
 from safepay.llm.providers import OllamaCloudProvider
 from safepay.policy import SEVERITY, evaluate
-from safepay_lab.sandbox import personas, run_interview
+from safepay_lab.sandbox import personas, run_questions
 
 POLICY = PolicyStore(ROOT / "config" / "policies").policies["payment_risk"]
 BASE = {"amount": 4800, "payee_age_days": 0, "risk_band": "elevated"}
@@ -54,10 +54,10 @@ def summarise(rows: list[dict]) -> dict:
 
 def render(rep: dict) -> str:
     s = rep["summary"]
-    o = ["# Sandbox evaluation of the Interviewer (generated; do not edit by hand)", "",
-         f"**Simulated customers.** The real Interviewer, running on {rep['model']}, asks up to three questions; sandbox actors answer. The scammer is a fixed script (generic cover stories), the victim is an LLM role-playing a customer, the attacker types injection text. Nothing here is real customer behaviour. {rep['conversations']} conversations, run {rep['seconds']} s.", "",
+    o = ["# Sandbox evaluation of the Questioner (generated; do not edit by hand)", "",
+         f"**Simulated customers.** The real Questioner, running on {rep['model']}, asks up to three questions; sandbox actors answer. The scammer is a fixed script (generic cover stories), the victim is an LLM role-playing a customer, the attacker types injection text. Nothing here is real customer behaviour. {rep['conversations']} conversations, run {rep['seconds']} s.", "",
          "A *flag* is a warning sign found in the answers (someone told me to pay, urgency, secrecy, I do not know the payee). Flags can only ADD friction to a payment; they can never lower the outcome.", "",
-         "## How often the answers raised a flag", "", "| Who is answering | Conversations | Flag found, using the phrases the Interviewer extracted (how the system works today) | Flag found, searching all the answers (upper bound) |", "|---|---|---|---|"]
+         "## How often the answers raised a flag", "", "| Who is answering | Conversations | Flag found, using the phrases the Questioner extracted (how the system works today) | Flag found, searching all the answers (upper bound) |", "|---|---|---|---|"]
     for g, v in s.items():
         o.append(f"| {NAMES[g]} | {v['conversations']} | {show(v['any_flag_from_extracted_phrases'])} | {show(v['any_flag_from_raw_answers'])} |")
     o += ["", "Reading: an honest customer should raise no flag (a flag there means needless friction). A scam victim who answers honestly should raise one. A coached victim is the hard case: the scammer's cover story hides exactly what the flags look for.", "",
@@ -96,7 +96,7 @@ def main():
 
     def one(i):
         try:
-            return run_interview(gw, vgw, people[i], f"sb{i}")
+            return run_questions(gw, vgw, people[i], f"sb{i}")
         except Exception as e:
             return {"error": f"{type(e).__name__}: {e}"[:200], "kind": people[i].kind}
     with ThreadPoolExecutor(a.workers) as ex:

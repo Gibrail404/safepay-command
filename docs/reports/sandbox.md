@@ -1,12 +1,12 @@
-# Sandbox evaluation of the Interviewer (generated; do not edit by hand)
+# Sandbox evaluation of the Questioner (generated; do not edit by hand)
 
-**Simulated customers.** The real Interviewer, running on gemma4:31b, asks up to three questions; sandbox actors answer. The scammer is a fixed script (generic cover stories), the victim is an LLM role-playing a customer, the attacker types injection text. Nothing here is real customer behaviour. 42 conversations, run 84 s.
+**Simulated customers.** The real Questioner, running on gemma4:31b, asks up to three questions; sandbox actors answer. The scammer is a fixed script (generic cover stories), the victim is an LLM role-playing a customer, the attacker types injection text. Nothing here is real customer behaviour. 42 conversations, run 84 s.
 
 A *flag* is a warning sign found in the answers (someone told me to pay, urgency, secrecy, I do not know the payee). Flags can only ADD friction to a payment; they can never lower the outcome.
 
 ## How often the answers raised a flag
 
-| Who is answering | Conversations | Flag found, using the phrases the Interviewer extracted (how the system works today) | Flag found, searching all the answers (upper bound) |
+| Who is answering | Conversations | Flag found, using the phrases the Questioner extracted (how the system works today) | Flag found, searching all the answers (upper bound) |
 |---|---|---|---|
 | Honest customer, ordinary payment | 12 | 0% (0 of 12; 95% interval 0% to 24%) | 0% (0 of 12; 95% interval 0% to 24%) |
 | Scam victim answering honestly | 12 | 92% (11 of 12; 95% interval 65% to 99%) | 100% (12 of 12; 95% interval 76% to 100%) |

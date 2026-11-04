@@ -139,7 +139,7 @@ Principle: an LLM step exists only where language adds value. Scoring, matching 
 
 | Agent | Workload | Job | Cannot do |
 |---|---|---|---|
-| Interviewer | Interception | Asks at most three adaptive questions when a payment is risky, extracts the customer's claims | Decide the outcome |
+| Questioner | Interception | Asks at most three adaptive questions when a payment is risky, extracts the customer's claims | Decide the outcome |
 | Explainer | Interception | Turns policy reasons and evidence ids into a plain-language warning | Add a fact that has no evidence id (checked) |
 | Investigator | Case review | Summarises a case for an analyst, every claim cites evidence, may abstain | Take any action |
 | Screening adjudicator | Payee screening | Given candidate OFAC matches, returns match, no match, or needs human, with reasons | Clear a hit without a human at high risk |

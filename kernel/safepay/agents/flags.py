@@ -1,4 +1,4 @@
-"""Interview flags: simple keyword rules over the customer's OWN extracted words. The result can only add friction in the policy.
+"""Answer flags: simple keyword rules over the customer's OWN extracted words. The result can only add friction in the policy.
 A customer (or an attacker who writes the customer's messages) can raise these flags, but no flag can lower the outcome."""
 from __future__ import annotations
 
@@ -10,6 +10,6 @@ KEYWORDS = {
 }
 
 
-def interview_flags(claims: list[str]) -> dict[str, bool]:
+def answer_flags(claims: list[str]) -> dict[str, bool]:
     text = " ".join(claims).lower()
     return {flag: any(k in text for k in words) for flag, words in KEYWORDS.items()}
