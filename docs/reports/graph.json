@@ -1,0 +1,190 @@
+{
+  "nodes": 203769,
+  "edges_undirected": 234355,
+  "labelled": 46564,
+  "split_sizes": {
+    "train": 23606,
+    "val": 6288,
+    "test": 16670
+  },
+  "models": {
+    "features_only": {
+      "n_features": 165,
+      "best_iteration": 320,
+      "threshold_from_validation": 0.3516764625196383,
+      "test": {
+        "n": 16670,
+        "illicit": 1083,
+        "average_precision": 0.7922345482925689,
+        "precision": 0.8287234042553191,
+        "recall": 0.7192982456140351,
+        "alerts": 940,
+        "tp": 779,
+        "fp": 161,
+        "fn": 304
+      },
+      "test_steps_35_42": {
+        "n": 9983,
+        "illicit": 914,
+        "average_precision": 0.911949117072537,
+        "precision": 0.9105882352941177,
+        "recall": 0.8468271334792122,
+        "alerts": 850,
+        "tp": 774,
+        "fp": 76,
+        "fn": 140
+      },
+      "test_steps_43_49_after_market_shutdown": {
+        "n": 6687,
+        "illicit": 169,
+        "average_precision": 0.04817518635834326,
+        "precision": 0.05555555555555555,
+        "recall": 0.029585798816568046,
+        "alerts": 90,
+        "tp": 5,
+        "fp": 85,
+        "fn": 164
+      },
+      "average_precision_ci95": [
+        0.7708016970364728,
+        0.8129803817293856
+      ],
+      "cases": {
+        "alerts": 940,
+        "cases": 869,
+        "alerts_per_case_mean": 1.0817031070195626,
+        "cases_with_2_or_more_alerts": 63,
+        "largest_case": 4,
+        "pure_illicit_cases_share_of_labelled_cases": 0.8262370540851554,
+        "pure_illicit_cases_with_2_or_more_alerts": 53,
+        "mixed_cases": 3,
+        "illicit_alerts": 779,
+        "reduction_in_items_to_review": 0.07553191489361699
+      }
+    },
+    "with_graph": {
+      "n_features": 499,
+      "best_iteration": 292,
+      "threshold_from_validation": 0.380079459154675,
+      "test": {
+        "n": 16670,
+        "illicit": 1083,
+        "average_precision": 0.7921690219478783,
+        "precision": 0.7793240556660039,
+        "recall": 0.7239150507848569,
+        "alerts": 1006,
+        "tp": 784,
+        "fp": 222,
+        "fn": 299
+      },
+      "test_steps_35_42": {
+        "n": 9983,
+        "illicit": 914,
+        "average_precision": 0.9170112033481728,
+        "precision": 0.883352208380521,
+        "recall": 0.8533916849015317,
+        "alerts": 883,
+        "tp": 780,
+        "fp": 103,
+        "fn": 134
+      },
+      "test_steps_43_49_after_market_shutdown": {
+        "n": 6687,
+        "illicit": 169,
+        "average_precision": 0.045544214893019325,
+        "precision": 0.032520325203252036,
+        "recall": 0.023668639053254437,
+        "alerts": 123,
+        "tp": 4,
+        "fp": 119,
+        "fn": 165
+      },
+      "average_precision_ci95": [
+        0.7707758528919706,
+        0.8128326593218794
+      ],
+      "cases": {
+        "alerts": 1006,
+        "cases": 919,
+        "alerts_per_case_mean": 1.0946681175190425,
+        "cases_with_2_or_more_alerts": 72,
+        "largest_case": 4,
+        "pure_illicit_cases_share_of_labelled_cases": 0.7823721436343852,
+        "pure_illicit_cases_with_2_or_more_alerts": 57,
+        "mixed_cases": 3,
+        "illicit_alerts": 784,
+        "reduction_in_items_to_review": 0.08648111332007957
+      }
+    },
+    "with_neighbour_scores": {
+      "n_features": 169,
+      "best_iteration": 315,
+      "threshold_from_validation": 0.3084094617127493,
+      "test": {
+        "n": 16670,
+        "illicit": 1083,
+        "average_precision": 0.7964516879965332,
+        "precision": 0.7345794392523365,
+        "recall": 0.7257617728531855,
+        "alerts": 1070,
+        "tp": 786,
+        "fp": 284,
+        "fn": 297
+      },
+      "test_steps_35_42": {
+        "n": 9983,
+        "illicit": 914,
+        "average_precision": 0.9122372087809841,
+        "precision": 0.8617256637168141,
+        "recall": 0.8522975929978118,
+        "alerts": 904,
+        "tp": 779,
+        "fp": 125,
+        "fn": 135
+      },
+      "test_steps_43_49_after_market_shutdown": {
+        "n": 6687,
+        "illicit": 169,
+        "average_precision": 0.06587667741736632,
+        "precision": 0.04216867469879518,
+        "recall": 0.04142011834319527,
+        "alerts": 166,
+        "tp": 7,
+        "fp": 159,
+        "fn": 162
+      },
+      "average_precision_ci95": [
+        0.775640549683358,
+        0.8178502181090263
+      ],
+      "cases": {
+        "alerts": 1070,
+        "cases": 966,
+        "alerts_per_case_mean": 1.1076604554865424,
+        "cases_with_2_or_more_alerts": 83,
+        "largest_case": 6,
+        "pure_illicit_cases_share_of_labelled_cases": 0.7443064182194618,
+        "pure_illicit_cases_with_2_or_more_alerts": 58,
+        "mixed_cases": 3,
+        "illicit_alerts": 786,
+        "reduction_in_items_to_review": 0.09719626168224305
+      }
+    }
+  },
+  "paired_average_precision_gain_with_graph": {
+    "mean": 2.937295168963083e-05,
+    "ci95": [
+      -0.005107858506305118,
+      0.005244411878240885
+    ]
+  },
+  "paired_average_precision_gain_with_neighbour_scores": {
+    "mean": 0.0042662223118479165,
+    "ci95": [
+      0.0007252027295757163,
+      0.00847353516085725
+    ]
+  },
+  "illicit_base_rate_test": 0.06496700644493103,
+  "seconds": 39
+}

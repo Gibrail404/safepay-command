@@ -85,7 +85,33 @@ def _build_first(ds: Dataset) -> dict:
     return write_processed(ds, df, {})
 
 
-BUILDERS = {"census_surnames": build_census_surnames, "census_first_male": _build_first, "census_first_female": _build_first, "ulb_creditcard": build_ulb, "sms_spam": build_sms, "ofac_sdn": build_ofac, "ofac_alt": build_ofac_alt}
+def _read_zip_csv(path, **kw) -> pd.DataFrame:
+    with zipfile.ZipFile(path) as z:
+        return pd.read_csv(z.open(next(n for n in z.namelist() if n.lower().endswith(".csv"))), **kw)
+
+
+def build_elliptic(ds: Dataset) -> dict:
+    df = _read_zip_csv(fetch(ds, "elliptic_txs_features.csv.zip"), header=None)
+    df.columns = ["txid", "time_step"] + [f"f{i}" for i in range(1, df.shape[1] - 1)]
+    df = df.astype({c: "float32" for c in df.columns if c.startswith("f")})
+    check_expected(ds, {"rows": len(df), "columns": df.shape[1]})
+    return write_processed(ds, df, {"time_steps": int(df["time_step"].nunique()), "feature_columns": int(df.shape[1] - 2)})
+
+
+def build_elliptic_edges(ds: Dataset) -> dict:
+    df = _read_zip_csv(fetch(ds, "elliptic_txs_edgelist.csv.zip")).rename(columns={"txId1": "src", "txId2": "dst"})
+    check_expected(ds, {"rows": len(df)})
+    return write_processed(ds, df, {})
+
+
+def build_elliptic_classes(ds: Dataset) -> dict:
+    df = _read_zip_csv(fetch(ds, "elliptic_txs_classes.csv.zip")).rename(columns={"txId": "txid"})
+    df["label"] = df["class"].map({"1": 1, "2": 0}).astype("float32")           # 1 illicit, 0 licit, NaN unknown
+    check_expected(ds, {"rows": len(df)})
+    return write_processed(ds, df[["txid", "label"]], {"illicit": int((df["label"] == 1).sum()), "licit": int((df["label"] == 0).sum()), "unknown": int(df["label"].isna().sum())})
+
+
+BUILDERS = {"elliptic": build_elliptic, "elliptic_edges": build_elliptic_edges, "elliptic_classes": build_elliptic_classes, "census_surnames": build_census_surnames, "census_first_male": _build_first, "census_first_female": _build_first, "ulb_creditcard": build_ulb, "sms_spam": build_sms, "ofac_sdn": build_ofac, "ofac_alt": build_ofac_alt}
 
 
 def build(name: str) -> dict:

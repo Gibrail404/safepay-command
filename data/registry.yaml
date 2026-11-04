@@ -56,13 +56,29 @@ datasets:
     licence_note: "US Census Bureau publication (US government work). Terms not re-read here."
     caveat: "US population only, 1990."
   elliptic:
-    title: "Elliptic Data Set (labelled Bitcoin transaction graph)"
-    role: "real graph for ring / case-grouping detection (v3)"
-    url: "https://data.pyg.org/datasets/elliptic/elliptic_txs_features.csv.zip"   # plus edgelist and classes files next to it
+    title: "Elliptic Data Set: transaction features (labelled Bitcoin transaction graph)"
+    role: "real graph for ring / case-grouping detection (nodes and features)"
+    url: "https://data.pyg.org/datasets/elliptic/elliptic_txs_features.csv.zip"
     format: zip
-    expected: { nodes: 203769, edges: 234355, features: 166 }
-    licence_note: "Original licence text NOT found. A Hugging Face mirror claims MIT but that is not authoritative. Check the Kaggle page before publishing results."
+    expected: { rows: 203769, columns: 167 }
+    licence_note: "Original licence text NOT found. A Hugging Face mirror claims MIT but that is not authoritative. Use locally only; do not redistribute; settle terms before any public demo."
     caveat: "Crypto, not card payments. Used only to test graph-based grouping."
+  elliptic_edges:
+    title: "Elliptic Data Set: transaction edges"
+    role: "real graph edges (payment flow between transactions)"
+    url: "https://data.pyg.org/datasets/elliptic/elliptic_txs_edgelist.csv.zip"
+    format: zip
+    expected: { rows: 234355 }
+    licence_note: "Same as the Elliptic features entry."
+    caveat: "Crypto, not card payments."
+  elliptic_classes:
+    title: "Elliptic Data Set: labels (illicit, licit, unknown)"
+    role: "real labels: class 1 = illicit, class 2 = licit, most nodes unknown"
+    url: "https://data.pyg.org/datasets/elliptic/elliptic_txs_classes.csv.zip"
+    format: zip
+    expected: { rows: 203769 }
+    licence_note: "Same as the Elliptic features entry."
+    caveat: "Only about 23% of nodes are labelled."
 simulated:
   scam_dialogues:
     why: "No public dataset of real bank scam conversations exists."
