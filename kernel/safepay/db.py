@@ -47,6 +47,17 @@ class DecisionRow(Base):
     __table_args__ = (UniqueConstraint("tenant", "idempotency_key", name="uq_decision_idem"),)
 
 
+class EventRow(Base):
+    __tablename__ = "events"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    event_hash: Mapped[str] = mapped_column(String(64))
+    type: Mapped[str] = mapped_column(String(64))
+    data: Mapped[str] = mapped_column(Text)
+    __table_args__ = (UniqueConstraint("tenant", "idempotency_key", name="uq_event_idem"),)
+
+
 class ToolCallRow(Base):
     __tablename__ = "tool_calls"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

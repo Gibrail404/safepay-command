@@ -2,7 +2,7 @@
 
 An AI decision platform for payment risk, sanctions screening and fraud investigation, built in public as a portfolio project. It is independent and is not affiliated with, endorsed by, or built from any company's data or code.
 
-**Status: v0.1, data foundation only.** The product (interception flow, analyst workbench, evaluations) is not built yet. This repo currently holds the master spec and a reproducible data pipeline that runs on real public datasets.
+**Status: M1 done (kernel).** Built and tested: the real-data pipeline (M0) and the kernel (M1): a hash-chained ledger, idempotent and replayable decisions, a deterministic policy engine, a tool gateway with risk tiers, signed capabilities and approvals, and the HTTP API. Not built yet: the risk model, the agents, screening, the simulator, the console (M2 and later).
 
 - Master spec: [docs/SPEC.md](docs/SPEC.md)
 - Data register, licences and verification log: [docs/DATA.md](docs/DATA.md)
@@ -21,6 +21,18 @@ pip install pandas numpy scipy pyarrow pyyaml pytest
 cd pipelines && python -m safepay_data all    # downloads and validates the real datasets (about 150 MB)
 cd .. && python -m pytest -q                         # unit tests plus tests on the real data
 ```
+
+## Run the kernel
+
+```bash
+docker compose up -d db                                   # PostgreSQL 16 on localhost:5433 (development password, localhost only)
+export DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@127.0.0.1:5433/safepay_test
+export SAFEPAY_TENANTS="demo:replace-with-your-own-key"   # tenant:key pairs
+PYTHONPATH=kernel uvicorn --factory safepay.api:create_app --port 8000
+# tests: SQLite by default, PostgreSQL (including the concurrency tests) with:
+SAFEPAY_TEST_DATABASE_URL=$DATABASE_URL python -m pytest tests/kernel -q
+```
+The API contract is generated from the code into `docs/openapi.json` (`python scripts/export_openapi.py`). Policies are version-controlled rules in `config/policies/`.
 
 ## Data in v0.1 (all downloaded and validated, see docs/DATA.md for licence caveats)
 

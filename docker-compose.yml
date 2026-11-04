@@ -1,0 +1,15 @@
+# Local development database. The password below is a development-only placeholder, bound to localhost; never reuse it anywhere real.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: safepay
+      POSTGRES_PASSWORD: safepay_dev_only
+      POSTGRES_DB: safepay_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U safepay -d safepay_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

@@ -1,13 +1,21 @@
-# Copy to .github/workflows/ci.yml (the token used by the assistant cannot push workflow files, so add it from the GitHub web UI or your own machine).
+# Copy to .github/workflows/ci.yml (the assistant's token cannot push workflow files; add it from the GitHub web UI or your own machine).
 name: ci
 on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: safepay, POSTGRES_PASSWORD: safepay_dev_only, POSTGRES_DB: safepay_test }
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U safepay -d safepay_test" --health-interval 3s --health-timeout 3s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install pandas numpy scipy pyarrow pyyaml pytest
-      - run: cd pipelines && python -m safepay_data all   # real downloads, checksum-verified
-      - run: python -m pytest -q
+      - run: pip install pandas numpy scipy pyarrow pyyaml pytest fastapi pydantic sqlalchemy "psycopg[binary]" uvicorn httpx hypothesis
+      - run: cd pipelines && python -m safepay_data all     # real downloads, checksum-verified
+      - run: python -m pytest -q                               # unit, invariants, real-data tests on SQLite
+      - run: SAFEPAY_TEST_DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@127.0.0.1:5433/safepay_test python -m pytest tests/kernel -q

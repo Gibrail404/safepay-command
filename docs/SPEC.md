@@ -135,7 +135,7 @@ Rendering and "no fake data" rules: UI reads only from the API; no mock JSON; ra
 ## 10. Roadmap (each milestone shippable)
 
 - M0 Foundations: done (spec, data register, real-data pipeline, 8 tests).
-- M1 Kernel: hash-chained ledger and verify, `/v1/events`, `/v1/decisions`, policy engine, tool gateway, idempotency, OpenAPI, CI. Exit: invariants 1, 2, 3, 6, 7 pass; replay reproduces outcomes.
+- M1 Kernel (DONE 2026-11-04): hash-chained ledger and verify, `/v1/events`, `/v1/decisions`, policy engine, tool gateway, idempotency, OpenAPI, CI. Exit: invariants 1, 2, 3, 6, 7 pass; replay reproduces outcomes.
 - M2 Risk and interception: ULB model with calibration and the PyTorch comparison, SMS model, model registry, Interviewer and Explainer, faithfulness checker, injection tests. Exit: generated metrics table; first shareable demo for the referrer.
 - M3 Screening: matcher, adjudicator, second skill loaded on the same kernel. Exit: recall and FPR tables with CIs; invariants hold for both workloads.
 - M4 Simulator and Decision Lab: scenario engine, sandbox agents, shadow mode, estimators validated against ground truth. Exit: "naive vs corrected vs truth" figure and measured CI coverage.
