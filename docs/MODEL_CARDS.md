@@ -42,3 +42,10 @@ One card per learned component. Every number is copied from a generated report i
 - **Method:** patterns for emails, cards, phones, IBANs, IDs and street addresses; the small spaCy English model for people's names.
 - **Results:** names fully removed 88% (US-style) and 73% (real OFAC individuals, many non-US); 14% of real SMS messages were changed by the name layer (an upper bound on wrong changes).
 - **Not safe for:** relying on it alone. Names still leak.
+
+## 7. Interception flow (questions, flags, policy)
+- **Purpose:** decide whether to hold a payment by asking the customer up to three questions and reading the answers, with the policy engine owning the outcome. Report: `interception.md` (`python scripts/eval_interception.py`).
+- **Data:** real held-out card transactions scored by the real risk model; payee age and customers are **simulated** (an AI role-player: genuine, vague, honest scam victim, victim following a cover story). 200 held-out scenarios (80 scams, 120 genuine), 100 development scenarios used only to check the harness. Nothing tuned on held-out.
+- **Results (held-out):** rules only and rules plus model hold 0 of 80 scams (by construction: scams look like ordinary payments). Fixed questions plus keyword rules (no AI in the decision path) hold 40 of 80 (50%, interval 39% to 61%); the AI Questioner flow holds 39 of 80 (49%, 38% to 60%). The two disagree on 11 scams (5 for the AI, 6 against). On honest scam victims fixed questions hold 100% and the AI's questions 85%; against the coached cover story 0% and 12%. False holds 1 of 120 for both; the AI flow takes a median of about 10 s and 1,468 tokens per questioned case.
+- **Reading:** in this simulation the value is the questioning step, not the AI doing it. This does not show AI is useless in the project (it also writes cited summaries and customer messages, unmeasured here), and it says nothing about real customers.
+- **Known limits:** simulated customers; scam scenarios built on ordinary-looking payments; one AI model; one run; intervals wide.

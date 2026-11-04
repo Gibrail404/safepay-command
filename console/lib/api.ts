@@ -53,7 +53,7 @@ export function useApi<T>(cfg: Config | null, path: string | null) {
 }
 
 export type Item = { ref: string; score: number; time_step: number | null; facts: { neighbours?: number; linked_alerts?: number } };
-export type CaseRow = { id: string; title: string; status: "open" | "dispositioned"; priority: "high" | "normal"; source: string; provenance: "real" | "simulated"; has_investigation: boolean; alerts: number; max_score: number; disposition?: { decision: string; actor: string; note: string; ts: string } };
+export type CaseRow = { id: string; title: string; status: "open" | "dispositioned"; priority: "high" | "normal"; source: string; provenance: "real" | "simulated"; has_investigation: boolean; alerts: number; max_score: number; disposition?: { decision: string; actor: string; note: string; ts: string; ai_recommendation?: string | null; overrode_ai?: boolean; override_reason?: string | null } };
 export type Investigation = { trace?: Trace; recommendation: "escalate" | "review" | "abstain"; sentences: string[]; priority: string; path: "llm" | "rule" | "fallback"; provider: string | null; model: string | null; evidence: { id: string; text: string }[]; injection_flags: string[] };
 export type CaseDetail = CaseRow & { items: Item[]; facts: Record<string, unknown>; investigation: Investigation | null; revealed_truth?: Record<string, number> };
 export type Stats = { open: number; dispositioned: number; open_high_priority: number; labels: number };
@@ -61,7 +61,29 @@ export type ReportInfo = { name: string; title: string; provenance: "real" | "si
 export type Report = ReportInfo & { markdown: string };
 export type LedgerEntry = { seq: number; tenant: string; kind: string; ts: string; hash: string; prev_hash: string; payload: Record<string, unknown>; payload_canonical: string };
 export type TraceStep = { id: string; label: string; status: "ok" | "skipped" | "failed" | "stopped"; ms: number; start_ms: number; detail: Record<string, any> };
-export type Trace = { path: "llm" | "fallback" | "rule"; total_ms: number; steps: TraceStep[] };
+export type Trace = { path?: "llm" | "fallback" | "rule"; total_ms: number; steps: TraceStep[] };
 export type FrontierRow = { hold_from: number; warn_from: number; scam_money_stopped_share: number; good_payments_warned_share: number; good_payments_held_share: number; value_per_payment: number };
 export type Frontier = { provenance: "simulated"; note: string; assumptions: Record<string, unknown>; rows: FrontierRow[] };
 export type SimResult = { provenance: "simulated"; note: string; assumptions: Record<string, unknown>; n: number; result: FrontierRow };
+
+export type Reason = { rule_id: string; code: string; outcome: string };
+export type InterceptionState = {
+  id: string; state: "asking" | "decided"; mode: "play" | "auto"; created: string;
+  payment: { amount: number; currency: string; payee_age_days: number; row_ref: string; kind: string; provenance: string; trigger: string[]; risk: { risk_score: number; risk_band: string; model_version: string; model_type: string; ms: number } };
+  transcript: { question: string; answer: string | null }[];
+  result: null | { claims: string[]; flags: Record<string, boolean>; flags_from_ai_phrases: Record<string, boolean>; flags_from_customer_words: Record<string, boolean>; reason_text: Record<string, string>;
+    decision: { outcome: string; risk_tier: string; requires_approval: boolean; policy_version: string; reasons: Reason[]; decision_id: string };
+    explanation: { text: string; llm: { path?: string; model?: string | null; tokens_in?: number | null; tokens_out?: number | null } }; ledger: { seq: number; hash: string; ts: string } | null };
+  trace: Trace; revealed_truth?: { is_scam: boolean; kind: string };
+};
+export type ScenarioInfo = { kind: string; label: string; simulated_customer: boolean };
+
+export type Overview = {
+  cases: Stats; ledger: { length: number; by_kind: Record<string, number> };
+  activity_by_hour: { hour: string; total: number; by_kind: Record<string, number> }[];
+  decisions: { total: number; by_outcome: Record<string, number>; top_reasons: { code: string; count: number }[] };
+  ai_guardrails: { investigations: number; by_path: Record<string, number>; reached_the_ai: number; passed_first_time: number; first_pass_rate: number | null };
+  interceptions: { total?: number; decided?: number; held?: number; questioned?: number };
+  ai_usage_today: { requests: number; tokens: number; request_cap: number };
+  recent_open_cases: CaseRow[];
+};

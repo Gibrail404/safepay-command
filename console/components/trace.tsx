@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useConfig } from "@/components/providers";
 import { useApi, type Trace, type TraceStep } from "@/lib/api";
@@ -12,7 +12,7 @@ const WORD: Record<TraceStep["status"], string> = { ok: "Passed", failed: "Faile
 type Phase = "idle" | "running" | "done";
 
 /** Replays a real recorded run. Each step lights up in order. Real durations are shown on every step; the replay itself is slowed down so it can be followed. */
-export function RunTrace({ trace, caseId }: { trace: Trace; caseId: string }) {
+export function RunTrace({ trace, caseId, headline, renderDetail }: { trace: Trace; caseId?: string; headline?: string; renderDetail?: (step: TraceStep) => ReactNode }) {
   const reduced = usePrefersReducedMotion();
   const [phases, setPhases] = useState<Phase[]>(() => trace.steps.map(() => "done"));
   const [selected, setSelected] = useState<number>(() => Math.max(0, trace.steps.findIndex((s) => s.status === "failed" || s.status === "stopped")));
@@ -37,7 +37,7 @@ export function RunTrace({ trace, caseId }: { trace: Trace; caseId: string }) {
   };
 
   const step = trace.steps[selected];
-  const pathNote = trace.path === "llm" ? "The AI's summary passed every check." : trace.path === "rule" ? "A fixed rule stopped the run before any AI was used." : "The AI gave no usable answer, so a safe fallback summary was used.";
+  const pathNote = headline ?? (trace.path === "llm" ? "The AI's summary passed every check." : trace.path === "rule" ? "A fixed rule stopped the run before any AI was used." : "The AI gave no usable answer, so a safe fallback summary was used.");
   return (
     <div className="trace">
       <div className="trace-head">
@@ -59,7 +59,7 @@ export function RunTrace({ trace, caseId }: { trace: Trace; caseId: string }) {
       <div className="trace-detail" aria-live="polite">
         <h3>{step.label} <Chip kind={step.status === "ok" ? "good" : step.status === "failed" || step.status === "stopped" ? "high" : "neutral"}>{WORD[step.status]}</Chip>
           {step.id === "fact_check" && step.detail.repaired && <> <Chip kind="warn">Fixed after one retry</Chip></>}</h3>
-        <StepDetail step={step} caseId={caseId} />
+        {renderDetail ? renderDetail(step) : <StepDetail step={step} caseId={caseId ?? ""} />}
       </div>
     </div>
   );
@@ -71,7 +71,8 @@ function StepDetail({ step, caseId }: { step: TraceStep; caseId: string }) {
   if (step.id === "ai") {
     const attempts = (d.attempts ?? []) as { provider: string; ok: boolean; reason?: string; kind?: string; detail?: string; ms?: number }[];
     if (!attempts.length) return <p>{String(d.note ?? "The AI was not asked.")}{d.fallback_reason ? ` (${d.fallback_reason})` : ""}</p>;
-    return (<><p className="muted">Each row is one real call.{d.model ? ` Final answer from ${d.model}.` : ""}</p>
+    const tok = d.tokens as { in?: number | null; out?: number | null } | undefined;
+    return (<><p className="muted">Each row is one real call.{d.model ? ` Final answer from ${d.model}.` : ""}{tok && tok.in != null ? ` Tokens used by the final answer: ${tok.in} in, ${tok.out} out.` : ""}</p>
       <div className="table-wrap"><table><thead><tr><th>Provider</th><th>Result</th><th>Time</th><th>Why</th></tr></thead><tbody>
         {attempts.map((a, i) => <tr key={i}><td>{a.provider}</td><td>{a.ok ? "Answer accepted" : "Rejected"}</td><td>{a.ms ?? 0} ms</td><td className="small">{a.ok ? "" : a.kind === "check" ? `Failed the fact check: ${a.detail ?? ""}` : a.reason ?? ""}</td></tr>)}
       </tbody></table></div></>);

@@ -49,6 +49,7 @@ class DispositionIn(BaseModel):
     decision: Decision
     note: str = Field(default="", max_length=500)
     simulated: bool = False              # true when the "analyst" is a simulation (flywheel experiments)
+    override_reason: str = Field(default="", max_length=500)       # required when dismissing a case the AI recommended escalating
 
 
 class NotFound(Exception):
@@ -57,6 +58,13 @@ class NotFound(Exception):
 
 class AlreadyDecided(Exception):
     pass
+
+
+class OverrideReasonRequired(Exception):
+    pass
+
+
+MIN_REASON = 10
 
 
 def import_cases(s: Session, tenant: str, body: ImportIn) -> dict:
@@ -79,7 +87,8 @@ def _row_view(r: CaseRow, disposition: DispositionRow | None, detail: bool) -> d
     out["alerts"] = len(content["items"])
     out["max_score"] = max(i["score"] for i in content["items"])
     if disposition:
-        out["disposition"] = {"decision": disposition.decision, "actor": disposition.actor, "note": disposition.note, "ts": disposition.ts}
+        out["disposition"] = {"decision": disposition.decision, "actor": disposition.actor, "note": disposition.note, "ts": disposition.ts, "ai_recommendation": disposition.ai_recommendation,
+                              "overrode_ai": bool(disposition.overrode_ai), "override_reason": disposition.override_reason}
     if detail:
         out["items"], out["facts"] = content["items"], content["facts"]
         out["investigation"] = json.loads(r.investigation) if r.investigation else None
@@ -128,7 +137,13 @@ def disposition(s: Session, tenant: str, case_id: str, actor: str, body: Disposi
     if s.scalar(select(DispositionRow.id).where(DispositionRow.tenant == tenant, DispositionRow.case_id == case_id)):
         raise AlreadyDecided(case_id)
     ts = ledger.now_iso()
-    s.add(DispositionRow(id="d_" + uuid.uuid4().hex[:12], tenant=tenant, case_id=case_id, actor=actor, decision=body.decision, note=body.note, ts=ts))
+    ai = (json.loads(r.investigation).get("recommendation") if r.investigation else None)
+    overrode = ai == "escalate" and body.decision == "dismissed_licit"          # the AI can only recommend more friction, so the only way to go against it is to dismiss
+    reason = body.override_reason.strip()
+    if overrode and len(reason) < MIN_REASON:
+        raise OverrideReasonRequired(case_id)
+    s.add(DispositionRow(id="d_" + uuid.uuid4().hex[:12], tenant=tenant, case_id=case_id, actor=actor, decision=body.decision, note=body.note, ts=ts,
+                         ai_recommendation=ai, overrode_ai=overrode, override_reason=reason if overrode else None))
     r.status = "dispositioned"
     labelled = 0
     if body.decision in ("confirmed_illicit", "dismissed_licit"):
@@ -136,7 +151,8 @@ def disposition(s: Session, tenant: str, case_id: str, actor: str, body: Disposi
         for it in json.loads(r.content)["items"]:
             s.add(LabelRow(tenant=tenant, case_id=case_id, subject_ref=it["ref"], label=value, actor=actor, source="simulated_analyst" if body.simulated else "analyst", ts=ts))
             labelled += 1
-    ledger.append(s, tenant, "case.dispositioned", {"case_id": case_id, "actor": actor, "decision": body.decision, "labels_written": labelled, "simulated": body.simulated})
+    ledger.append(s, tenant, "case.dispositioned", {"case_id": case_id, "actor": actor, "decision": body.decision, "labels_written": labelled, "simulated": body.simulated,
+                                                   "ai_recommendation": ai, "overrode_ai": overrode, "override_reason_sha256": ledger.sha256_hex(reason) if overrode else None})
     return {"case_id": case_id, "decision": body.decision, "labels_written": labelled}
 
 

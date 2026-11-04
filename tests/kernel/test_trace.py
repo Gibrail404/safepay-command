@@ -97,3 +97,8 @@ def test_verify_exposes_the_saved_head_fingerprint_which_equals_the_last_entry_h
     import_one(c)
     v = c.get("/v1/audit/verify", headers=A).json()
     assert v["ok"] and v["head_hash"] == c.get("/v1/audit", headers=A).json()[-1]["hash"]
+
+
+def test_the_ai_step_records_the_tokens_the_provider_reported():
+    _, res, _, _, trace = investigate_traced(LLMGateway([FakeProvider([GOOD_93])]), "r", ITEMS)          # the fake provider reports 10 tokens in and 10 out
+    assert next(s for s in trace["steps"] if s["id"] == "ai")["detail"]["tokens"] == {"in": 10, "out": 10}

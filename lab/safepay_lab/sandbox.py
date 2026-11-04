@@ -68,20 +68,22 @@ def answer(gw: LLMGateway, run_id: str, p: Persona, question: str, turn: int) ->
     return gw.generate(LLMRequest(task=victim_task(p, question), output=Reply, max_tokens=120), f"{run_id}-v{turn}", fallback).parsed.text
 
 
-def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str) -> dict:
+def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str, facts: dict | None = None) -> dict:
     """One conversation: the real Questioner asks up to three questions, the sandbox actor answers. Returns what the pipeline would see."""
-    evidence = build_evidence({"amount": 4800, "payee_age_days": 0, "currency": "EUR"}, "hold", [])
-    state, claims, questions, fallbacks = QuestionState(), [], [], 0
+    evidence = build_evidence(facts or {"amount": 4800, "payee_age_days": 0, "currency": "EUR"}, "hold", [])
+    state, claims, questions, fallbacks, tokens = QuestionState(), [], [], 0, 0
     for turn in range(MAX_QUESTIONS):
         step, res = next_step(gw, f"{run_id}-q{turn}", evidence, state)
         fallbacks += res is not None and res.path == "fallback"
+        tokens += (res.tokens_in or 0) + (res.tokens_out or 0) if res is not None else 0
         claims += step.claims
         questions.append(step.question)
         state.asked.append(step.question)
         state.answers.append(answer(victim_gw, run_id, p, step.question, turn))
     final, res = next_step(gw, f"{run_id}-end", evidence, state)               # reads the last answer too
     final_fell_back = res is not None and res.path == "fallback"
+    tokens += (res.tokens_in or 0) + (res.tokens_out or 0) if res is not None else 0
     claims += final.claims
     raw = " ".join(state.answers)
-    return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks, "final_reading_fell_back": bool(final_fell_back),
+    return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks, "final_reading_fell_back": bool(final_fell_back), "tokens": tokens,
             "flags_from_extracted_phrases": answer_flags(claims), "flags_from_raw_answers": answer_flags([raw])}

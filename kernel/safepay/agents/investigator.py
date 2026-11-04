@@ -85,7 +85,8 @@ def _steps(items, evidence, res, thin, facts_ms, rule_ms, check_ms, check_issues
                   {"id": "fact_check", "label": "Fact check", "status": "skipped", "ms": 0, "detail": {"note": "Nothing to check."}}]
     else:
         steps.append({"id": "ai", "label": "AI summary", "status": "ok" if ok_attempt else "failed", "ms": ai_ms,
-                      "detail": {"attempts": [{k: a[k] for k in ("provider", "ok", "reason", "kind", "detail", "ms") if k in a} for a in attempts], "model": res.model if res else None, "fallback_reason": getattr(res, "fallback_reason", None)}})
+                      "detail": {"attempts": [{k: a[k] for k in ("provider", "ok", "reason", "kind", "detail", "ms") if k in a} for a in attempts], "model": res.model if res else None, "fallback_reason": getattr(res, "fallback_reason", None),
+                                                                                   "tokens": {"in": res.tokens_in, "out": res.tokens_out}}})
         checked = res.path == "llm" or bool(failed_checks)
         steps.append({"id": "fact_check", "label": "Fact check", "status": ("ok" if res.path == "llm" else "failed") if checked else "skipped", "ms": check_ms,
                       "detail": {"repaired": bool(failed_checks) and res.path == "llm", "issues": check_issues[:6], "note": "Every sentence must cite a fact, use only numbers from the cited fact, and avoid forbidden wording." if checked else "The AI gave no reply to check."}})

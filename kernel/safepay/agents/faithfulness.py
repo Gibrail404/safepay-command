@@ -26,7 +26,8 @@ def cited_ids(sentence: str) -> list[str]:
 
 
 def strip_citations(sentence: str) -> str:
-    return re.sub(r"\s+", " ", CITE.sub("", sentence)).strip()
+    """The sentence as a person should read it: citation tags removed and no stray space left before punctuation ("go ahead [E1]." becomes "go ahead.")."""
+    return re.sub(r"\s+([.,;:!?])", r"\1", re.sub(r"\s+", " ", CITE.sub("", sentence))).strip()
 
 
 def check_sentences(sentences: list[str], evidence: list[Evidence], outcome: str) -> list[Issue]:

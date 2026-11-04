@@ -214,3 +214,8 @@ def test_the_new_rules_fire_as_designed():
     assert evaluate(POLICY, {"amount": 50, "secrecy": True}).outcome == "warn"
     assert evaluate(POLICY, {"amount": 5000, "unknown_payee": True, "payee_age_days": 400}).outcome == "warn"
     assert evaluate(POLICY, {"amount": 50, "payee_age_days": 400}).outcome == "allow"
+
+
+def test_stripping_citations_leaves_no_space_before_punctuation():
+    from safepay.agents.faithfulness import strip_citations
+    assert strip_citations("Your payment can go ahead for now [E1]. The model rates it low [E2, E3] .") == "Your payment can go ahead for now. The model rates it low."

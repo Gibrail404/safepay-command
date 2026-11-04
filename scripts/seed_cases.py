@@ -24,7 +24,12 @@ def build_cases(max_cases: int, seed: int) -> list[dict]:
     alert[test_nodes[score[test_nodes] > thr]] = True
     ids = np.where(alert)[0]
     k, comp = connected_components(g.A[ids][:, ids], directed=False)
+    sub_adj = g.A[ids][:, ids].tocoo()
     adj_alerts = np.asarray(g.A[ids][:, ids].sum(axis=1)).ravel()
+    pairs_by_comp: dict[int, list[tuple[int, int]]] = {}
+    for r_, c_ in zip(sub_adj.row, sub_adj.col):
+        if r_ < c_:
+            pairs_by_comp.setdefault(int(comp[r_]), []).append((int(r_), int(c_)))             # a real payment link between two alerts of the same case
     deg = np.asarray(g.A.sum(axis=1)).ravel()
     groups = [np.where(comp == c)[0] for c in range(k)]
     rng = np.random.default_rng(seed)
@@ -40,7 +45,8 @@ def build_cases(max_cases: int, seed: int) -> list[dict]:
         top = max(i["score"] for i in items)
         out.append({"external_id": f"elliptic-{int(g.txid[nodes[0]])}", "source": "elliptic-bitcoin", "provenance": "real", "priority": "high" if top >= 0.95 else "normal",
                     "title": (f"{len(items)} linked alerts at time step {items[0]['time_step']}" if len(items) > 1 else f"1 alert at time step {items[0]['time_step']}"), "items": items,
-                    "facts": {"dataset": "Elliptic Bitcoin transaction graph (real, crypto)", "alert_threshold": round(float(thr), 4)}, "truth": truth})
+                    "facts": {"dataset": "Elliptic Bitcoin transaction graph (real, crypto)", "alert_threshold": round(float(thr), 4),
+                              "links": [[str(int(g.txid[ids[a_]])), str(int(g.txid[ids[b_]]))] for a_, b_ in pairs_by_comp.get(int(comp[m[0]]), [])][:300]}, "truth": truth})
     return out
 
 

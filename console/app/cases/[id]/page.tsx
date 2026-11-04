@@ -7,6 +7,7 @@ import { call, useApi, type CaseDetail, type Investigation } from "@/lib/api";
 import { Card, Chip, ErrorBox, Loading, Provenance } from "@/components/ui";
 import { labelOf } from "../page";
 import { RunTrace } from "@/components/trace";
+import { AlertNetwork } from "@/components/network";
 
 function Sentence({ text, evidence }: { text: string; evidence: Investigation["evidence"] }) {
   const parts = text.split(/(\[E\d+(?:\s*,\s*E\d+)*\])/g);
@@ -40,18 +41,24 @@ function Investigator({ id, inv, onDone }: { id: string; inv: Investigation | nu
 function Decision({ c, onDone }: { c: CaseDetail; onDone: () => void }) {
   const { cfg, canAct } = useConfig();
   const [note, setNote] = useState("");
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const aiRec = c.investigation?.recommendation;
+  const needsReason = aiRec === "escalate";                                  // the AI can only ask for more friction, so the only way to go against it is to dismiss
+  const reasonOk = reason.trim().length >= 10;
   const send = async (decision: string, sure: string) => {
     if (!window.confirm(sure)) return;
     setBusy(true); setErr(null);
-    try { await call(cfg, `/v1/cases/${c.id}/disposition`, { method: "POST", body: { decision, note } }); onDone(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { await call(cfg, `/v1/cases/${c.id}/disposition`, { method: "POST", body: { decision, note, override_reason: decision === "dismissed_licit" ? reason : "" } }); onDone(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   if (c.status === "dispositioned" && c.disposition) {
     const truth = c.revealed_truth;
     return (
       <Card title="Decision">
         <p><Chip kind="done">{labelOf(c.disposition.decision)}</Chip> by {c.disposition.actor} on {new Date(c.disposition.ts).toLocaleString()}</p>
+        {c.disposition.ai_recommendation && <p className="muted">The AI recommended: <strong>{c.disposition.ai_recommendation}</strong>.{c.disposition.overrode_ai ? "" : " The decision was not against it."}</p>}
+        {c.disposition.overrode_ai && <p><Chip kind="warn">Overrode the AI</Chip> Reason recorded: {c.disposition.override_reason}</p>}
         {c.disposition.note && <p>Note: {c.disposition.note}</p>}
         {truth && <><h3>What the dataset says (revealed after your decision)</h3>
           <div className="table-wrap"><table><thead><tr><th>Transaction</th><th>Dataset label</th></tr></thead><tbody>
@@ -65,10 +72,12 @@ function Decision({ c, onDone }: { c: CaseDetail; onDone: () => void }) {
     <Card title="Your decision">
       {err && <ErrorBox message={err} />}
       {!canAct && <p className="muted">Your role is read-only, so you can look but not decide.</p>}
+      {aiRec && <p>The AI recommends: <Chip kind={aiRec === "escalate" ? "high" : aiRec === "review" ? "normal" : "neutral"}>{aiRec === "escalate" ? "escalate" : aiRec === "review" ? "normal review" : "not enough evidence"}</Chip> <span className="muted small">It is advice. You decide, and your decision is recorded either way.</span></p>}
+      {needsReason && <label className="stack">To dismiss this case against the AI&apos;s recommendation, write why (at least 10 characters; kept in the audit trail)<textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={2} aria-label="Reason for overriding the AI" /></label>}
       <label className="stack">Note (optional, kept in the audit trail)<textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} /></label>
       <div className="row">
         <button type="button" className="btn danger" disabled={busy || !canAct} onClick={() => send("confirmed_illicit", "Record this case as confirmed illicit? This also records a label for each alert and cannot be changed.")}>Confirm illicit</button>
-        <button type="button" className="btn" disabled={busy || !canAct} onClick={() => send("dismissed_licit", "Dismiss this case as licit? This also records a label for each alert and cannot be changed.")}>Dismiss as licit</button>
+        <button type="button" className="btn" disabled={busy || !canAct || (needsReason && !reasonOk)} title={needsReason && !reasonOk ? "Write a reason first: the AI recommended escalating" : undefined} onClick={() => send("dismissed_licit", "Dismiss this case as licit? This also records a label for each alert and cannot be changed.")}>Dismiss as licit</button>
         <button type="button" className="btn" disabled={busy || !canAct} onClick={() => send("escalated", "Escalate this case? No labels are recorded.")}>Escalate</button>
       </div>
     </Card>
@@ -92,6 +101,9 @@ export default function CaseDetailPage() {
           <tbody>{data.items.map((it) => <tr key={it.ref}><td className="mono">{it.ref}</td><td>{it.time_step ?? "n/a"}</td><td>{it.score.toFixed(2)}</td><td>{it.facts.neighbours ?? "n/a"}</td><td>{it.facts.linked_alerts ?? 0}</td></tr>)}</tbody>
         </table></div>
       </Card>
+      {Array.isArray(data.facts.links) && (data.facts.links as string[][]).length > 0 && data.items.length > 1 && (
+        <Card title="How these alerts are linked"><AlertNetwork items={data.items} links={data.facts.links as string[][]} />
+          <p className="muted small">Each line is a real direct payment link between two transactions in the public Elliptic graph. Bigger and redder means a higher model score.</p></Card>)}
       <Investigator id={data.id} inv={data.investigation} onDone={reload} />
       <Decision c={data} onDone={reload} />
     </>

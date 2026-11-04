@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from . import cases as case_svc, ledger
 from .agents.investigator import investigate_traced
+from . import interception as icp, interception_deps as icp_deps, overview as overview_svc
 from .llm.budget_db import DbBudget
 from .llm.gateway import LLMGateway
 from .config import ROLE_RANK, PolicyStore, Settings
@@ -53,6 +54,16 @@ class ApprovalIn(BaseModel):
     approve: bool
 
 
+class InterceptionIn(BaseModel):
+    kind: Literal["ordinary", "large_new_payee", "vague_customer", "scam_uncoached", "scam_coached"]
+    seed: int = Field(default=0, ge=0, le=1_000_000)
+    mode: Literal["play", "auto"] = "play"
+
+
+class AnswerIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
 class SimulationIn(BaseModel):
     warn_from: float = Field(ge=-10, le=100)
     hold_from: float = Field(ge=-10, le=100)
@@ -73,7 +84,7 @@ class SimulateIn(BaseModel):
     contexts: list[dict] = Field(max_length=500)
 
 
-def create_app(settings: Settings | None = None, registry: ToolRegistry | None = None, llm: LLMGateway | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, registry: ToolRegistry | None = None, llm: LLMGateway | None = None, interception_deps: "icp_deps.InterceptionDeps | None" = None) -> FastAPI:
     settings = settings or Settings.from_env()
     engine = make_engine(settings.database_url)
     sf = init_db(engine)
@@ -94,6 +105,18 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         from .llm.providers import OllamaCloudProvider
         chain = [OllamaCloudProvider(settings.ollama_api_key, m) for m in ("gemma4:31b", "deepseek-v4.1-flash")] if settings.ollama_api_key else []
         llm = LLMGateway(chain, budget=DbBudget(sf, max_requests_per_day=400, max_tokens_per_day=400_000, max_requests_per_run=6), timeout_s=12.0, deadline_s=24.0)
+
+    interceptions = icp.InterceptionService(sf, llm, decisions)
+    deps_cache: dict = {"deps": interception_deps}
+
+    def get_deps() -> "icp_deps.InterceptionDeps":
+        if deps_cache["deps"] is None:
+            try:
+                deps_cache["deps"] = icp_deps.default_deps(llm)
+            except ImportError:
+                raise HTTPException(501, "the interception demo needs the simulation and model packages on this server")
+        return deps_cache["deps"]
+    app.state.llm = llm
 
     @app.middleware("http")
     async def limit_body(request, call_next):
@@ -240,6 +263,51 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return {"provenance": "simulated", "note": "Simulated payments with assumed scam behaviour; amounts follow the real ULB card data. Not evidence about real customers.",
                 "assumptions": asdict(cfg), "n": body.n, "seed": body.seed, "result": policy_truth(sample_population(body.n, body.seed, cfg), cfg, body.warn_from, body.hold_from)}
 
+    # ---------------- interception: payment, risk, questions, flags, policy, message, ledger ----------------
+    @app.get("/v1/interceptions/scenarios")
+    def interception_scenarios(tenant: str = Depends(tenant_of)):
+        return icp_deps.scenario_catalog()
+
+    @app.post("/v1/interceptions")
+    def start_interception(body: InterceptionIn, tenant: str = Depends(analyst_of)):
+        deps = get_deps()
+        try:
+            sc = deps.scenario(body.kind, body.seed)
+            risk = deps.risk(sc)
+        except RuntimeError as e:
+            raise HTTPException(503, str(e))
+        payment = {"amount": sc.amount, "payee_age_days": sc.payee_age_days, "currency": "EUR", "row_ref": sc.row_ref, "kind": sc.kind,
+                   "provenance": "Payment features: a real transaction from the held-out ULB data, scored by the real model. Payee age and everything the customer says: simulated."}
+        iid = interceptions.start(tenant, payment, risk, body.mode, {"is_scam": sc.is_scam, "kind": sc.kind})
+        if body.mode == "auto":
+            for turn in range(icp.MAX_QUESTIONS):
+                state = interceptions.get(tenant, iid)
+                if state["state"] != "asking":
+                    break
+                interceptions.answer(tenant, iid, deps.victim(llm, f"{iid}-v{turn}", sc, state["transcript"][-1]["question"], turn))
+        return interceptions.get(tenant, iid)
+
+    @app.post("/v1/interceptions/{iid}/answer")
+    def answer_interception(iid: str, body: AnswerIn, tenant: str = Depends(analyst_of)):
+        try:
+            interceptions.answer(tenant, iid, body.text)
+        except icp.NotFound:
+            raise HTTPException(404, "interception not found")
+        except icp.AlreadyDecided:
+            raise HTTPException(409, "this payment already has a decision")
+        except icp.Busy:
+            raise HTTPException(409, "an answer for this payment is already being processed")
+        except icp.BadAnswer as e:
+            raise HTTPException(422, str(e))
+        return interceptions.get(tenant, iid)
+
+    @app.get("/v1/interceptions/{iid}")
+    def get_interception(iid: str, tenant: str = Depends(tenant_of)):
+        try:
+            return interceptions.get(tenant, iid)
+        except icp.NotFound:
+            raise HTTPException(404, "interception not found")
+
     # ---------------- cases, investigation, dispositions, labels ----------------
     @app.post("/v1/cases/import")
     def import_cases(body: case_svc.ImportIn, tenant: str = Depends(admin_of)):
@@ -299,6 +367,8 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
                 return case_svc.disposition(s, tenant, case_id, x_actor, body)
         except case_svc.NotFound:
             raise HTTPException(404, "case not found")
+        except case_svc.OverrideReasonRequired:
+            raise HTTPException(422, f"Dismissing a case the AI recommended escalating needs a written reason of at least {case_svc.MIN_REASON} characters.")
         except (case_svc.AlreadyDecided, IntegrityError):
             raise HTTPException(409, "this case already has a disposition")
 
@@ -325,9 +395,14 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
             frontier_cache[key] = frontier(SimConfig(), n=n, seed=seed)
         return {"provenance": "simulated", "note": "Simulated payments with assumed scam behaviour; amounts follow the real ULB card data. Not evidence about real customers.", "assumptions": asdict(SimConfig()), "n": n, "seed": seed, "rows": frontier_cache[key]}
 
+    @app.get("/v1/overview")
+    def get_overview(tenant: str = Depends(tenant_of)):
+        with sf() as s:
+            return overview_svc.overview(s, tenant)
+
     # ---------------- generated reports (the UI's metrics pages read these) ----------------
     reports_dir = Path(__file__).resolve().parents[2] / "docs" / "reports"
-    REPORTS = {"risk_model": ("Transaction risk model", "real"), "text_model": ("Scam-text model", "real"), "screening": ("Name screening", "real"), "graph": ("Graph and cases", "real"), "flywheel": ("Analyst feedback flywheel", "mixed"), "investigator": ("Investigator summaries", "mixed"), "redaction": ("Name and address redaction", "mixed"), "load": ("Local load test", "simulated"),
+    REPORTS = {"risk_model": ("Transaction risk model", "real"), "text_model": ("Scam-text model", "real"), "screening": ("Name screening", "real"), "graph": ("Graph and cases", "real"), "flywheel": ("Analyst feedback flywheel", "mixed"), "investigator": ("Investigator summaries", "mixed"), "redaction": ("Name and address redaction", "mixed"), "interception": ("Interception: does the AI questioning add anything?", "mixed"), "load": ("Local load test", "simulated"),
                "decision_lab": ("Decision Lab", "simulated"), "uplift": ("Uplift", "simulated"), "sandbox": ("Questioner under pressure", "simulated"), "llm_eval": ("LLM provider evaluation", "mixed")}
 
     @app.get("/v1/reports")

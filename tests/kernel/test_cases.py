@@ -142,3 +142,71 @@ def test_fallback_and_abstain_summaries_pass_the_faithfulness_checker():
 
 def test_priority_rule():
     assert priority_for("escalate", [item("t", 0.5)]) == "high" and priority_for("review", [item("t", 0.96)]) == "high" and priority_for("review", [item("t", 0.5)]) == "normal"
+
+
+# ---------------- overriding the AI with a recorded reason ----------------
+def investigated_case(c, recommendation_json):
+    cid = import_one(c, case(items=[item("t1", 0.93), item("t2", 0.91, linked_alerts=1)]))
+    c.post(f"/v1/cases/{cid}/investigate", headers=A)
+    return cid
+
+
+def test_dismissing_a_case_the_ai_recommended_escalating_needs_a_written_reason():
+    c = make(FakeProvider([GOOD_93]))
+    cid = investigated_case(c, GOOD_93)
+    assert c.get(f"/v1/cases/{cid}", headers=A).json()["investigation"]["recommendation"] == "escalate"
+    h = {**A, "X-Actor": "ana"}
+    for reason in ("", "no", "too short"):
+        r = c.post(f"/v1/cases/{cid}/disposition", json={"decision": "dismissed_licit", "override_reason": reason}, headers=h)
+        assert r.status_code == 422 and "reason" in r.json()["detail"]
+    assert c.get(f"/v1/cases/{cid}", headers=A).json()["status"] == "open"                    # a refused override changed nothing
+    ok = c.post(f"/v1/cases/{cid}/disposition", json={"decision": "dismissed_licit", "override_reason": "Known exchange hot wallet, confirmed with the compliance desk."}, headers=h)
+    assert ok.status_code == 200
+    d = c.get(f"/v1/cases/{cid}", headers=A).json()["disposition"]
+    assert d["overrode_ai"] is True and d["ai_recommendation"] == "escalate" and "exchange" in d["override_reason"]
+
+
+def test_the_override_is_in_the_ledger_with_a_fingerprint_of_the_reason_and_the_chain_verifies():
+    c = make(FakeProvider([GOOD_93]))
+    cid = investigated_case(c, GOOD_93)
+    reason = "Known exchange hot wallet, confirmed with the compliance desk."
+    c.post(f"/v1/cases/{cid}/disposition", json={"decision": "dismissed_licit", "override_reason": reason}, headers={**A, "X-Actor": "ana"})
+    last = c.get("/v1/audit", headers=A).json()[-1]
+    from safepay import ledger
+    assert last["kind"] == "case.dispositioned" and last["payload"]["overrode_ai"] is True and last["payload"]["override_reason_sha256"] == ledger.sha256_hex(reason)
+    assert c.get("/v1/audit/verify", headers=A).json()["ok"]
+
+
+def test_agreeing_with_or_escalating_the_ai_needs_no_reason_and_other_recommendations_never_do():
+    c = make(FakeProvider([GOOD_93]))
+    cid = investigated_case(c, GOOD_93)
+    assert c.post(f"/v1/cases/{cid}/disposition", json={"decision": "confirmed_illicit"}, headers={**A, "X-Actor": "ana"}).status_code == 200
+    d = c.get(f"/v1/cases/{cid}", headers=A).json()["disposition"]
+    assert d["overrode_ai"] is False and d["override_reason"] is None
+    c2 = make()                                                                                  # no model: the safe fallback says "review", which a person may dismiss freely
+    cid2 = investigated_case(c2, None)
+    assert c2.get(f"/v1/cases/{cid2}", headers=A).json()["investigation"]["recommendation"] == "review"
+    assert c2.post(f"/v1/cases/{cid2}/disposition", json={"decision": "dismissed_licit"}, headers={**A, "X-Actor": "ana"}).status_code == 200
+
+
+def test_a_case_nobody_investigated_can_be_dismissed_without_a_reason():
+    c = make()
+    cid = import_one(c)
+    r = c.post(f"/v1/cases/{cid}/disposition", json={"decision": "dismissed_licit"}, headers={**A, "X-Actor": "ana"})
+    assert r.status_code == 200 and c.get(f"/v1/cases/{cid}", headers=A).json()["disposition"]["ai_recommendation"] is None
+
+
+@pytest.mark.skipif(not TEST_DB_URL.startswith("postgresql"), reason="needs PostgreSQL")
+def test_a_database_created_before_the_override_columns_gets_them_added_in_place():
+    from sqlalchemy import inspect, text
+    from safepay.db import Base, init_db, make_engine
+    engine = make_engine(TEST_DB_URL)
+    Base.metadata.drop_all(engine)
+    with engine.begin() as conn:                      # the old shape of the table, without the three new columns
+        conn.execute(text("CREATE TABLE dispositions (id VARCHAR(40) PRIMARY KEY, tenant VARCHAR(64), case_id VARCHAR(40) UNIQUE, actor VARCHAR(64), decision VARCHAR(24), note VARCHAR(500), ts VARCHAR(40))"))
+    init_db(engine)
+    init_db(engine)                                   # repeating it must be harmless
+    cols = {c["name"] for c in inspect(engine).get_columns("dispositions")}
+    assert {"ai_recommendation", "overrode_ai", "override_reason"} <= cols
+    Base.metadata.drop_all(engine)
+    engine.dispose()

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from sqlalchemy import Boolean, Index, Integer, String, Text, UniqueConstraint, create_engine
+from sqlalchemy import Boolean, Float, Index, Integer, String, Text, UniqueConstraint, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -105,6 +105,9 @@ class DispositionRow(Base):
     decision: Mapped[str] = mapped_column(String(24))
     note: Mapped[str] = mapped_column(String(500))
     ts: Mapped[str] = mapped_column(String(40))
+    ai_recommendation: Mapped[str | None] = mapped_column(String(16), nullable=True)      # what the AI recommended at the time of the decision
+    overrode_ai: Mapped[bool] = mapped_column(Boolean, default=False)
+    override_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class LabelRow(Base):
@@ -128,12 +131,36 @@ class LlmUsageRow(Base):
     tokens: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class InterceptionRow(Base):
+    """One payment moving through the interception flow: risk score, up to three customer questions, flags, policy decision, customer message."""
+    __tablename__ = "interceptions"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant: Mapped[str] = mapped_column(String(64), index=True)
+    state: Mapped[str] = mapped_column(String(16))                   # asking | decided
+    mode: Mapped[str] = mapped_column(String(8))                     # play (a person answers) | auto (a simulated customer answers)
+    payment: Mapped[str] = mapped_column(Text)                       # JSON: amount, payee age, currency, risk, provenance notes
+    transcript: Mapped[str] = mapped_column(Text)                    # JSON list of {question, answer, ms, llm}
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: flags, decision, explanation, trace
+    truth: Mapped[str | None] = mapped_column(Text, nullable=True)   # the scenario's hidden label, revealed after the decision
+    decision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    busy_since: Mapped[float] = mapped_column(Float, default=0.0)    # 0 when idle; a timestamp while an answer is being processed
+    created: Mapped[str] = mapped_column(String(40))
+
+
 def make_engine(url: str = "sqlite+pysqlite:///:memory:"):
     if url.startswith("sqlite") and ":memory:" in url:
         return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     return create_engine(url, pool_pre_ping=True)
 
 
+_ADDED_COLUMNS = ["ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS ai_recommendation VARCHAR(16)", "ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS overrode_ai BOOLEAN DEFAULT FALSE",
+                  "ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS override_reason VARCHAR(500)"]
+
+
 def init_db(engine) -> sessionmaker[Session]:
     Base.metadata.create_all(engine)
+    if engine.dialect.name == "postgresql":                       # databases created before these columns existed: add them in place, harmlessly repeatable
+        with engine.begin() as conn:
+            for stmt in _ADDED_COLUMNS:
+                conn.exec_driver_sql(stmt)
     return sessionmaker(engine, expire_on_commit=False)

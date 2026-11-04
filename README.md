@@ -7,12 +7,12 @@ An AI decision platform for payment risk, sanctions screening and fraud investig
 - Master spec: [docs/SPEC.md](docs/SPEC.md) · Harness design: [docs/HARNESS.md](docs/HARNESS.md) · Data register and licence caveats: [docs/DATA.md](docs/DATA.md)
 - [Threat model](docs/THREAT_MODEL.md) (each threat with its test and its residual risk) · [Model cards](docs/MODEL_CARDS.md) · [Product requirements](docs/PRD.md) · [Deploying](docs/DEPLOY.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Blog draft](docs/BLOG.md)
 
-![A 23-second tour: a real case, the replay of its run, tampering with the audit chain, and the policy slider](docs/figures/demo.gif)
+![A 45-second tour on real data with a live AI model: a payment is questioned, the case run is replayed, an AI recommendation is overridden with a reason, the audit chain is tampered with, and the policy sliders move](docs/figures/demo.gif)
 
 | | |
 |---|---|
-| ![Case queue of real alerts](docs/figures/console-queue.png) | ![The run of one AI summary, step by step with real timings](docs/figures/console-case.png) |
-| ![Tampering with a copy of the audit chain, detected in the browser](docs/figures/console-tamper.png) | ![Decision Lab: move the thresholds, see the trade-off](docs/figures/console-lab.png) |
+| ![Overview counted from real recorded data](docs/figures/console-overview.png) | ![One payment end to end: risk score, questions, decision, ledger, hidden truth](docs/figures/console-interception.png) |
+| ![A case, its AI summary, the run replay and the analyst override with a reason](docs/figures/console-override.png) | ![Tampering with a copy of the audit chain, detected in the browser](docs/figures/console-tamper.png) |
 
 ## What is in it
 
@@ -25,10 +25,11 @@ An AI decision platform for payment risk, sanctions screening and fraud investig
 | Decision Lab | Simulator with known truth, counterfactual estimators checked against it, uplift, simulation API | `docs/reports/decision_lab.md`, `uplift.md` (simulated) |
 | Graph and cases | Real Elliptic transaction graph: does structure help, how alerts group into cases | `docs/reports/graph.md` (real data) |
 | Flywheel | How the way analysts' labels are collected changes what the model learns | `docs/reports/flywheel.md` (real transactions, simulated analysts) |
-| Console | Next.js analyst console that renders only what the API returns: case queue; investigation summary with citations; a **run replay** that animates the real recorded steps (facts, redaction, abstain rule, AI call, fact check, fallback, priority, ledger) with real timings; an audit trail where **your browser re-computes every hash** and lets you try to tamper with a copy; a **Decision Lab** with live simulated policy sliders; reports; read-only roles | 12 Playwright browser tests (`cd console && npm run e2e`) |
+| Interception flow | One payment end to end through the API and the console: real risk model, up to three customer questions, warning signs, policy decision, customer message, audit record, hidden-truth reveal. The AI can only add friction. | `tests/kernel/test_interception.py`, `reports/interception.md` |
+| Console | Next.js analyst console that renders only what the API returns: an **overview** counted from real recorded data (AI guardrail gauge, ledger activity, decisions and reasons, AI usage); case queue with a real-link **alert network**; investigation summary with citations and an **analyst override that requires a written reason**; a **run replay** that animates the real recorded steps (facts, redaction, abstain rule, AI call, fact check, fallback, priority, ledger) with real timings; an audit trail where **your browser re-computes every hash** and lets you try to tamper with a copy; a **Decision Lab** with live simulated policy sliders; reports; read-only roles | 19 Playwright browser tests (`cd console && npm run e2e`) |
 | Security and operations | Roles per API key, per-key rate limit, request-size limits, AI spending caps kept in the database, name and address redaction | `docs/THREAT_MODEL.md`, `reports/redaction.md`, `reports/load.md` |
 
-Honest headline findings: simple neighbour features add almost nothing on the real graph while the model collapses after a known market shutdown (drift); corrected counterfactual estimators are close to unbiased but their intervals still under-cover; name folding did not help screening; coached victims evade question-based checks. See each report's limits section.
+Honest headline findings: **asking the customer questions is where all the scam detection comes from, but the AI Questioner did not beat a fixed list of questions with keyword rules** (49% against 50% of 80 simulated scams held, intervals overlap; the model alone and rules alone caught none because the scams look like ordinary payments); simple neighbour features add almost nothing on the real graph while the model collapses after a known market shutdown (drift); corrected counterfactual estimators are close to unbiased but their intervals still under-cover; name folding did not help screening; coached victims evade question-based checks. See each report's limits section.
 
 ## Principles
 
@@ -53,6 +54,7 @@ macOS: LightGBM needs `brew install libomp`, and LightGBM and PyTorch must never
 ```bash
 docker compose up -d db                                   # PostgreSQL 16 on localhost:5433 (development password, localhost only)
 docker compose exec db psql -U safepay -d postgres -c "CREATE DATABASE safepay"      # once
+make demo              # or run the steps below one by one
 cp .env.example .env   # optional: OLLAMA_API_KEY enables the AI summaries; without it a safe plain summary is used
 bash scripts/dev_server.sh                                # API on :8000, demo key "demo-key" (see the script)
 python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key    # real Elliptic alerts become cases
