@@ -11,7 +11,7 @@ Setup once: `docker compose up -d db`, `bash scripts/dev_server.sh`, `python scr
 | 2:20 | **Override** | "The AI recommended escalating. To dismiss I must write a reason, and the ledger keeps a fingerprint of it. The AI advises, I decide, and both are on record." |
 | 2:50 | Audit trail, **tamper demo** | "My browser recomputed every fingerprint. Change a record on my copy: the chain breaks there. Let the attacker cover their tracks: it links up again, but the last fingerprint no longer matches the saved head." |
 | 3:30 | **Decision Lab** | "Simulated, so it says so. Move the hold threshold and watch scam money stopped and good customers bothered move together." |
-| 3:50 | Report: Interception comparison | "I measured whether the AI adds value over fixed questions plus keyword rules, on 200 held-out simulated scenarios. It did not beat them: 49% against 50%. All the detection comes from asking. I report that." |
+| 3:50 | Report: Interception comparison | "I measured whether the AI adds value over fixed questions plus keyword rules on two separate held-out sets. The first said no difference, the second said the AI was better, so I pooled them: all the detection comes from asking; fixed questions never miss an honest victim but are blind to a cover story, the AI catches some cover stories but misses a few honest victims. They are complementary. I report both sets." |
 | 4:15 | Close | "The AI assists, a deterministic policy decides, and I kept the negative results. Limits are on every report." |
 
 Keep ready: `docs/THREAT_MODEL.md` for "what could go wrong", `docs/reports/load.md` for performance questions.

@@ -17,7 +17,7 @@ Payment scams coach victims to lie, so a plain warning fails. Analysts work acro
 | The AI assists, a deterministic policy decides; AI can only add friction | Built and tested (kernel, policies, flags) |
 | Every decision is recorded and replayable; tampering is detectable | Built (hash-chained ledger, replay, verify) |
 | Score payments and screen names | Built (risk and text models, OFAC matcher) as tools and policies |
-| One payment end to end: risk score, customer questions, warning signs, policy decision, customer message, audit record | Built (API and console) and measured on simulated customers; the AI Questioner did **not** beat a fixed-question baseline (49% against 50% of scams held) |
+| One payment end to end: risk score, customer questions, warning signs, policy decision, customer message, audit record | Built (API and console) and measured on simulated customers; a fixed-question baseline holds every honest simulated victim and the AI questioner adds detection only against coached cover stories (57% against 50% over 160 simulated scams, paired p of about 0.05; see the interception reports) |
 | An analyst can disagree with the AI, on the record | Built: dismissing against an "escalate" recommendation needs a written reason, kept with a fingerprint in the ledger |
 | Group alerts into cases; cited AI summary; analyst decision; audit trail | Built; console and API; Playwright and API tests |
 | Measure what a policy change would do without running it | Built on **simulated** data (Decision Lab, uplift) |

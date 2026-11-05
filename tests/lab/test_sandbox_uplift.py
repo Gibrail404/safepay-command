@@ -50,3 +50,15 @@ def test_ranking_by_true_uplift_beats_ranking_by_score_and_beats_allowing_everyt
     best = true_value(pop, hold_top_fraction(lambda x: true_uplift + 1e-6 * x[:, 1], pop.x, 0.1))
     by_score = true_value(pop, hold_top_fraction(lambda x: x[:, 1], pop.x, 0.1))
     assert best > by_score > true_value(pop, hold_top_fraction(lambda x: x[:, 1], pop.x, 1e-9))
+
+
+def test_hybrid_conversation_uses_the_fixed_bank_first_then_the_ai_and_reads_all_answers():
+    from safepay.agents.questioner import QUESTION_BANK
+    from safepay_lab.sandbox import run_questions
+    ai_q = json.dumps({"question": "Did the caller give you a number to call back?", "claims": [], "done": False})
+    reading = json.dumps({"claims": ["a man from my bank called and told me to pay"]})
+    gw = LLMGateway([FakeProvider([ai_q, reading])])
+    vgw = LLMGateway([FakeProvider([json.dumps({"text": "A man from my bank called and told me to pay today."})] * 3)])
+    r = run_questions(gw, vgw, Persona("uncoached_victim", "s"), "h1", fixed_prefix=2)
+    assert r["questions"][:2] == QUESTION_BANK[:2] and r["questions"][2] == "Did the caller give you a number to call back?" and r["fixed_prefix"] == 2
+    assert r["flags_from_extracted_phrases"]["third_party_instructed"] and r["flags_from_raw_answers"]["third_party_instructed"]

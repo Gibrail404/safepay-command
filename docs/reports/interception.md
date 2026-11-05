@@ -47,6 +47,7 @@ Over 160 questioned held-out cases: median 10.2 s of AI time per case (including
 3. **The AI flow did not measurably beat the simple fixed-question version** (39 against 40; the two disagreed on 11 scams, 5 in the AI's favour and 6 in the fixed version's). The AI's open questions did worse than the fixed list on honest scam victims (85% against 100%) and better against the coached cover story (12% against 0%; very few cases, one run).
 4. **The cost to genuine customers is the same for both:** 1 of 120 held by mistake and 5 of 120 warned or held. The bigger cost is being asked questions at all (80 of 120 genuine customers here, because the scenario mix includes many new-payee payments).
 5. **The AI flow costs about 10 s and 1468 tokens per questioned case; the fixed version uses no AI in the decision path.**
+7. **Read the follow-up before concluding.** A second, fresh held-out set (`interception_hybrid.md`) gave a different net result between the fixed and AI versions, so the comparison in point 3 describes this set only.
 6. **What this does and does not show.** In this simulation, the value is the questioning step, not the AI doing it. It does not show that AI is useless: the project's AI is also used for cited case summaries and readable customer messages, which this report does not measure. It also does not show how real customers or real scammers behave. A real test needs real data.
 
 ## Limits (read these)

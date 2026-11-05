@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 from safepay.agents.evidence import build_evidence
 from safepay.agents.flags import answer_flags
-from safepay.agents.questioner import MAX_QUESTIONS, QuestionState, next_step
+from safepay.agents.questioner import MAX_QUESTIONS, QUESTION_BANK, QuestionState, next_step
 from safepay.llm.gateway import LLMGateway, LLMRequest
 
 SITUATION = {
@@ -68,12 +68,17 @@ def answer(gw: LLMGateway, run_id: str, p: Persona, question: str, turn: int) ->
     return gw.generate(LLMRequest(task=victim_task(p, question), output=Reply, max_tokens=120), f"{run_id}-v{turn}", fallback).parsed.text
 
 
-def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str, facts: dict | None = None) -> dict:
-    """One conversation: the real Questioner asks up to three questions, the sandbox actor answers. Returns what the pipeline would see."""
+def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str, facts: dict | None = None, fixed_prefix: int = 0) -> dict:
+    """One conversation: up to three questions, the sandbox actor answers. The first `fixed_prefix` questions come from the fixed question bank (0 means the AI writes all three);
+    the rest are written by the real Questioner. The last answer is read as well. Returns what the pipeline would see."""
     evidence = build_evidence(facts or {"amount": 4800, "payee_age_days": 0, "currency": "EUR"}, "hold", [])
     state, claims, questions, fallbacks, tokens = QuestionState(), [], [], 0, 0
     for turn in range(MAX_QUESTIONS):
-        step, res = next_step(gw, f"{run_id}-q{turn}", evidence, state)
+        if turn < fixed_prefix:
+            from safepay.agents.questioner import QuestionStep
+            step, res = QuestionStep(question=QUESTION_BANK[turn], claims=[], done=False), None
+        else:
+            step, res = next_step(gw, f"{run_id}-q{turn}", evidence, state)
         fallbacks += res is not None and res.path == "fallback"
         tokens += (res.tokens_in or 0) + (res.tokens_out or 0) if res is not None else 0
         claims += step.claims
@@ -85,5 +90,5 @@ def run_questions(gw: LLMGateway, victim_gw: LLMGateway, p: Persona, run_id: str
     tokens += (res.tokens_in or 0) + (res.tokens_out or 0) if res is not None else 0
     claims += final.claims
     raw = " ".join(state.answers)
-    return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks, "final_reading_fell_back": bool(final_fell_back), "tokens": tokens,
+    return {"kind": p.kind, "label": p.label, "questions": questions, "answers": state.answers, "claims": claims, "fallback_questions": fallbacks, "final_reading_fell_back": bool(final_fell_back), "tokens": tokens, "fixed_prefix": fixed_prefix,
             "flags_from_extracted_phrases": answer_flags(claims), "flags_from_raw_answers": answer_flags([raw])}
