@@ -40,11 +40,19 @@ class Scenario:
 
 @lru_cache(maxsize=1)
 def _pool():
-    """Real held-out non-fraud transactions, loaded once per process."""
-    from safepay_ml.data import load_ulb, temporal_split
-    frame = temporal_split(load_ulb())["test"].frame
-    frame = frame[frame["Class"] == 0].reset_index(drop=False)
-    return frame
+    """Real held-out non-fraud transactions, loaded once per process. The full held-out period of the ULB data is used whenever it is available (so evaluations never change silently);
+    only when it is not (the deployed container) the 3,000-row sample data/processed/scenario_pool.parquet from scripts/build_scenario_pool.py is used. For the same seed, scenarios
+    therefore differ between the two sources."""
+    import pandas as pd
+    from pathlib import Path
+    processed = Path(__file__).resolve().parents[2] / "data" / "processed"
+    if (processed / "ulb_creditcard.parquet").exists():
+        from safepay_ml.data import load_ulb, temporal_split
+        frame = temporal_split(load_ulb())["test"].frame
+        return frame[frame["Class"] == 0].reset_index(drop=False)
+    if (processed / "scenario_pool.parquet").exists():
+        return pd.read_parquet(processed / "scenario_pool.parquet")
+    raise RuntimeError("no scenario data: download the ULB data or provide scenario_pool.parquet")
 
 
 def build(kind: str, seed: int) -> Scenario:

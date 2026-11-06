@@ -60,6 +60,8 @@ bash scripts/dev_server.sh                                # API on :8000, demo k
 python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key    # real Elliptic alerts become cases
 cd console && npm install && npm run dev                  # console on :3000, then connect with the address, key and your name
 ```
+Deploying (steps in [docs/DEPLOY.md](docs/DEPLOY.md)): `docker build -t safepay-api .`, then `python scripts/check_deploy.py --url <api address> --key <key> --origin <console address> --try-interception` prints PASS or FAIL for each thing that matters. Nothing is deployed to a cloud yet.
+
 Tests: `SAFEPAY_TEST_DATABASE_URL=postgresql+psycopg://safepay:safepay_dev_only@127.0.0.1:5433/safepay_test python -m pytest tests -q` also runs the PostgreSQL-only concurrency tests. The API contract is generated into `docs/openapi.json` (`python scripts/export_openapi.py`).
 
 ## Regenerate the reports
@@ -87,4 +89,4 @@ The licence terms of the OFAC, ULB and Elliptic data are not confirmed; the repo
 
 ## Known gaps
 
-Names still leak to the AI provider (73% to 88% removed in tests); injection screening is heuristic; API keys are static strings with three roles and no rotation; the rate limiter is per process; tool handlers run inside the database transaction (an outbox pattern was considered and not built); nothing is deployed; data licences are unconfirmed. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+Names still leak to the AI provider (on names whose words the name list has not seen, 92% of US-style and 76% of non-US names were fully removed; the list makes names it already contains reliable but does not generalise); injection screening is heuristic; API keys are static strings with three roles and no rotation; the rate limiter is per process; tool handlers run inside the database transaction (an outbox pattern was considered and not built); nothing is deployed; data licences are unconfirmed. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).

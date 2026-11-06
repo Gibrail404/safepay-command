@@ -29,7 +29,7 @@ Real money movement; any regulatory or compliance claim; customer data; branding
 
 ## Requirements and measured results
 - **Faithful summaries:** every sentence cites a fact and passes a deterministic check. Measured: 0 of 85 unsupported sentences in first answers (60 real alert cases, one model, one run).
-- **No silent personal-data leakage:** measured partial defence only (names removed 73% to 88% in tests).
+- **No silent personal-data leakage:** measured partial defence only (on names the list has not seen, 92% of US-style and 76% of non-US names fully removed).
 - **Honest evaluation:** every report states its data (real or simulated), intervals where possible and its limits. Negative results are kept (neighbour features add almost nothing; folding did not help; the model collapses after a market shutdown).
 - **Performance (local, one laptop):** at 8 concurrent clients, decisions about 440 to 480 requests per second with 95th percentile about 25 ms; name screening about 260 (one process) to about 560 (four) requests per second. See `reports/load.md` for what these numbers do not mean.
 

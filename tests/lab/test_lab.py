@@ -80,3 +80,20 @@ def test_stopped_money_by_archetype_is_between_zero_and_one_and_matches_the_over
     rows = by_archetype(SimConfig(), n=100_000)
     assert all(0 <= r["money_stopped_share"] <= 1 and abs(r["held_share"] + r["warned_share"] + r["allowed_share"] - 1) < 1e-9 for r in rows)
     assert sum(r["share_of_scams"] for r in rows) == pytest.approx(1.0)
+
+
+def test_the_sample_is_used_only_when_the_full_data_is_missing_and_a_clear_error_when_neither_exists(tmp_path, monkeypatch):
+    """The 3,000-row sample is a fallback for machines without the ULB data (the container); the full data is always used when present."""
+    import pandas as pd
+    from safepay_lab import scenarios
+    scenarios._pool.cache_clear()
+    full = pd.DataFrame({"index": [1], "Amount": [100.0], "Class": [0], **{f"V{i}": [0.0] for i in range(1, 29)}})
+    # with the full data present the sample file is ignored; without it the sample is used; with neither there is a clear error
+    monkeypatch.setattr(scenarios.Path if hasattr(scenarios, "Path") else __import__("pathlib").Path, "exists", lambda self: self.name == "scenario_pool.parquet", raising=False)
+    monkeypatch.setattr(pd, "read_parquet", lambda path, *a, **k: full)
+    assert len(scenarios._pool()) == 1
+    scenarios._pool.cache_clear()
+    monkeypatch.setattr(__import__("pathlib").Path, "exists", lambda self: False, raising=False)
+    with pytest.raises(RuntimeError):
+        scenarios._pool()
+    scenarios._pool.cache_clear()

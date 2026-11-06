@@ -204,3 +204,46 @@ def test_names_are_redacted_when_the_ner_layer_is_available():
         pytest.skip("spaCy model not installed")
     r = redact("My landlord Ahmed Al-Rashid asked me to pay rent")
     assert "Ahmed" not in r.text and "[NAME_1]" in r.text and redact("I will pay 4800 AED on 12 March").count == 0
+
+
+# ---------------- the name list (second pass after the language model) ----------------
+@pytest.fixture()
+def tiny_gazetteer():
+    from safepay.llm import ner
+    ner.set_gazetteer({"ahmed", "rashid", "kowalski", "baker"})
+    yield
+    ner.set_gazetteer(None)
+
+
+def test_a_run_of_two_known_name_tokens_is_redacted_even_without_a_cue(tiny_gazetteer):
+    r = redact("Yesterday Ahmed Rashid phoned me", use_ner=True)
+    assert "Ahmed" not in r.text and "Rashid" not in r.text
+
+
+def test_a_single_name_after_a_cue_word_is_strong_but_a_lone_name_without_a_cue_is_only_weak(tiny_gazetteer):
+    from safepay.llm import ner
+    strong, weak = ner.gazetteer_spans("please pay Ahmed today")
+    assert strong == [(11, 16)] and weak == []
+    strong, weak = ner.gazetteer_spans("Kowalski was great")
+    assert strong == [] and weak == [(0, 8)]                       # kept only if it touches a name the language model found
+
+
+def test_lower_case_words_that_match_a_name_are_never_redacted(tiny_gazetteer):
+    assert redact("the baker made ahmed rashid bread", use_ner=True).text.count("[NAME") == 0
+
+
+def test_a_name_the_model_split_is_joined_with_its_neighbour_from_the_list(tiny_gazetteer):
+    from safepay.llm import ner
+    text = "My landlord Ahmed Al-Rashid asked me"
+    out = redact(text, use_ner=True).text
+    assert "Rashid" not in out and "Ahmed" not in out and ner.available() is not None
+
+
+def test_the_second_pass_is_off_when_the_list_is_empty_or_ner_is_not_wanted():
+    from safepay.llm import ner
+    ner.set_gazetteer(set())
+    try:
+        assert ner.gazetteer_spans("Ahmed Rashid") == ([], [])
+    finally:
+        ner.set_gazetteer(None)
+    assert "Ahmed" in redact("Ahmed Rashid", use_ner=False).text

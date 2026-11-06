@@ -40,7 +40,7 @@ One card per learned component. Every number is copied from a generated report i
 ## 6. Name and address redaction
 - **Purpose:** remove personal details before text reaches a model. Report: `redaction.md`.
 - **Method:** patterns for emails, cards, phones, IBANs, IDs and street addresses; the small spaCy English model for people's names.
-- **Results:** names fully removed 88% (US-style) and 73% (real OFAC individuals, many non-US); 14% of real SMS messages were changed by the name layer (an upper bound on wrong changes).
+- **Results (`redaction.md`):** on names made only of words the evaluation list has not seen, fully removed: 92% (US-style) and 76% (real OFAC individuals, many non-US) with the language model plus the list, against 92% and 75% with the model alone, so the list adds almost nothing for unseen names. For names whose words are in the shipped list it reaches 99%, which is optimistic (circular), not an estimate. The language model alone changed 14% of real SMS messages and the list changed 5% more (upper bounds on wrong changes).
 - **Not safe for:** relying on it alone. Names still leak.
 
 ## 7. Interception flow (questions, flags, policy)
