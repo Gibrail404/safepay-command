@@ -14,4 +14,9 @@ export default async function globalSetup() {
     }),
   });
   if (!res.ok) throw new Error(`fixture import failed: ${res.status}`);
+  const people = [["e2e-admin", "admin@e2e.test", "Tester", "admin"], ["e2e-admin", "ana@e2e.test", "Ana Analyst", "admin"], ["e2e-admin", "viewer@e2e.test", "Vera Viewer", "viewer"], ["empty-key", "empty@e2e.test", "Tester", "admin"]];
+  for (const [key, email, name, role] of people) {      // test accounts, added the way an admin would add people
+    const r = await fetch("http://127.0.0.1:8100/v1/auth/users", { method: "POST", headers: { "X-API-Key": key, "Content-Type": "application/json" }, body: JSON.stringify({ email, name, role, password: "test-password-1" }) });
+    if (!r.ok) throw new Error(`test account ${email} failed: ${r.status}`);
+  }
 }

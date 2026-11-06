@@ -1,43 +1,49 @@
 # Deploying SafePay Command
 
-**What has been verified:** an earlier build of the API image ran locally against PostgreSQL (health, roles, reports, the screening tool, the simulation endpoint, name redaction without PyTorch, a non-root user). `scripts/demo.sh` was run end to end from an empty database. The console builds and its 19 browser tests pass against a local API.
-**What has not been verified:** (1) the latest image, which adds the optional demo assets and the name list, could not be finished building in the last session because the network stalled while pip was downloading packages (a read timeout, not a code error); rebuild it and run `scripts/check_deploy.py` against it before you rely on it. (2) Nothing has been deployed to a cloud: that needs your accounts and secrets, which an assistant must not create or enter. Free-tier terms change often; check each provider's current pricing and limits.
+**Currently deployed (free tiers):** console on Vercel (`https://safepay-command.vercel.app`), API on Railway (`https://safepay-command-production.up.railway.app`, built from this repository's `Dockerfile`, **without** the demo assets), database on Neon (PostgreSQL, US East). `scripts/check_deploy.py` passes every required check against it.
+**What has been verified:** the API image runs against PostgreSQL (health, roles, accounts, reports, screening, simulation, name redaction without PyTorch, non-root user, about 160 MB of memory at start and about 260 MB after one simulation and one interception); the console builds and its 21 browser tests pass against a local API; CORS is allowed for the console's address.
+**What has not been verified:** how Railway's trial credit ($5, 30 days, then $1 a month) holds up under real use; there are no backups, alerts or log shipping.
 
-## Suggested free setup
-| Part | Where | Why |
+## The setup
+| Part | Where | Notes |
 |---|---|---|
-| Console (Next.js) | Vercel | free hosting that deploys from GitHub |
-| API (the Docker image) | Hugging Face Spaces (Docker, **private**) | free CPU with generous memory; sleeps when idle |
+| Console (Next.js) | Vercel | the server address is fixed at build time (`NEXT_PUBLIC_API_URL`, defaulting to the hosted API); people sign in with email and password |
+| API (the Docker image) | Railway, from the GitHub repository | Hugging Face Docker Spaces are now a paid feature; Render sleeps after 15 idle minutes and takes about a minute to wake; Fly.io and Koyeb have no ongoing free tier. Check each provider's current terms. |
 | Database | Neon (PostgreSQL) | free tier, scales to zero |
 | AI model | Ollama Cloud key (optional) | without it summaries use the safe plain-text fallback |
 
+## Accounts
+- **Sign-up is closed unless the server names a tenant:** set `SAFEPAY_SIGNUP_TENANT=demo` and anyone can create an account that joins that tenant as an **analyst** (never admin). Everyone in a tenant sees the same cases and ledger, so this is a shared demo space, not private workspaces. `SAFEPAY_MAX_USERS` (default 500) caps how many accounts open sign-up can create, and sign-in and sign-up attempts are rate-limited per client address.
+- Passwords are stored as salted scrypt hashes; a sign-in token is random, expires after 7 days and only its SHA-256 is stored. A signed-in person's decisions carry their account name, not a header they could change.
+- **Admins** are never created by sign-up. Use an admin API key to add people: `POST /v1/auth/users` with `{email, name, password, role}` (role viewer, analyst or admin; the person joins your tenant).
+- **API keys** (`SAFEPAY_TENANTS`) still exist for scripts and for `check_deploy.py`; the console does not use them.
+
 ## Before anything is public
 1. **Rotate** the Ollama and Gemini keys that were pasted into a chat during development.
-2. **Decide the data question.** OFAC, ULB and Elliptic licence terms are unconfirmed. The image downloads the OFAC list at build time. The optional demo assets (below) contain a 3,000-row sample of real ULB transactions and a model trained on that data: **put an image with those assets only into a PRIVATE Space** until the terms are settled. Without the assets the image has no ULB data and the Interception page answers 503.
-3. **Never ship the demo key.** Make real keys: `SAFEPAY_TENANTS="demo:<long-random>:viewer,team:<long-random>:analyst"`. A shared read-only (viewer) key is reasonable for a look-around; analyst and admin keys are not.
-4. Set `SAFEPAY_CAPABILITY_SECRET` to a long random value, otherwise capability tokens do not survive a restart.
-5. Use the database provider's connection string with TLS, written in SQLAlchemy form: `postgresql+psycopg://USER:PASSWORD@HOST/DB?sslmode=require`.
+2. **Decide the data question.** OFAC, ULB and Elliptic licence terms are unconfirmed. The image downloads the OFAC list at build time. The optional demo assets (below) contain a 3,000-row sample of real ULB transactions and a model trained on that data: keep an image with those assets private until the terms are settled. Without the assets the image has no ULB data and the Interception page answers 503.
+3. Make a long random admin key: `SAFEPAY_TENANTS="demo:<long-random>:admin"`, and a long random `SAFEPAY_CAPABILITY_SECRET`, otherwise capability tokens do not survive a restart.
+4. Use the database provider's connection string with TLS: `DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require` (leave out `channel_binding=require`).
 
 ## Steps
-**0. Optional: include the Interception page.** On your machine, with the data and trained model present: `bash scripts/prepare_demo_assets.sh`. It copies the risk model, the scenario sample and the `ml` package into `deploy/demo_assets/` (git-ignored). Then `docker build -t safepay-api .` picks them up, installs LightGBM and its runtime library, and the page works. Build once locally and run `python scripts/check_deploy.py` against `docker run -p 7861:7860 ...` before uploading anything.
+**0. Optional: include the Interception page.** On your machine, with the data and trained model present: `bash scripts/prepare_demo_assets.sh`, then `docker build -t safepay-api .`. Keep that image private (see above).
 
-**1. Database.** Create a Neon project and copy the connection string (convert it to the form above). Tables are created on first start.
+**1. Database.** Create a Neon project and copy the pooled connection string. Tables are created on first start.
 
-**2. API (Hugging Face Space).** Create a **private** Space with the Docker SDK. Put the repository files in it, but use `deploy/huggingface/README.md` as the Space's `README.md` (it carries the front matter and port 7860). If you want the demo assets, add them with `git add -f deploy/demo_assets` because they are git-ignored. Add these as Space secrets: `DATABASE_URL`, `SAFEPAY_TENANTS`, `SAFEPAY_CAPABILITY_SECRET`, `SAFEPAY_CORS_ORIGINS` (your console's address) and optionally `OLLAMA_API_KEY`. The first build takes several minutes; the image is about 1.4 GB.
+**2. API (Railway).** New project, Deploy from GitHub repo. Variables: `DATABASE_URL`, `SAFEPAY_TENANTS`, `SAFEPAY_CAPABILITY_SECRET`, `SAFEPAY_SIGNUP_TENANT`, `SAFEPAY_CORS_ORIGINS` (the console's address), optionally `OLLAMA_API_KEY`. Settings, Networking, Generate Domain.
 
-**3. Cases.** Import the real cases with an admin key: `python scripts/seed_cases.py --url https://<space>.hf.space --key <admin key>` (needs the Elliptic data and a trained model locally).
+**3. Cases.** Import the real cases with the admin key: `python scripts/seed_cases.py --url https://<api> --key <admin key>` (needs the Elliptic data and a trained model locally).
 
-**4. Console (Vercel).** Import the GitHub repository, root directory `console`, build command `npm run build`. No environment variables are required: users type the server address, key and their name into the connect form.
+**4. Console (Vercel).** Import the GitHub repository, root directory `console`. Set `NEXT_PUBLIC_API_URL` only if the API address differs from the default in `console/lib/api.ts`.
 
-**5. Check it.** One command tells you what works:
+**5. Check it.**
 ```bash
-python scripts/check_deploy.py --url https://<space>.hf.space --key <your key> --origin https://<console>.vercel.app --try-interception
+python scripts/check_deploy.py --url https://<api> --key <admin key> --origin https://<console> --try-interception
 ```
 It prints PASS, FAIL or WARN for: server up, key accepted, wrong key refused, audit chain verifies, reports served, name-screening tool loaded, risk model loaded (WARN if absent), simulation endpoint, the console's address allowed by CORS, and one simulated payment end to end. Exit code 0 only if every required check passes.
 
 ## Known operational gaps
-- The rate limiter is per process; the daily AI cap is shared through the database.
+- The rate limiters are per process; the daily AI cap is shared through the database. Behind a proxy, the per-address sign-in limit trusts the last `X-Forwarded-For` entry, which is the one the platform's own proxy recorded.
 - The OFAC list in the image is as of the build date; the screening tool reports `thresholds_tuned_on_this_list: false` when it differs from the list the thresholds were tuned on. Rebuild and re-run `scripts/eval_screening.py` to refresh.
 - No automatic backups, alerting or log shipping are configured. `healthz` is the only probe.
-- Free instances sleep, so the first request after a quiet period is slow.
-- Scenarios in the deployed demo come from a 3,000-row sample of the ULB held-out data, so a given seed gives a different payment than on a machine with the full data. The evaluation reports use the full data.
+- No password reset, email verification or multi-factor sign-in: accounts are for a demo, not for real customer data.
+- Scenarios in the deployed demo come from a 3,000-row sample of the ULB held-out data, so a given seed gives a different payment than on a machine with the full data.

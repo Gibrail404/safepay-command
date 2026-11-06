@@ -10,10 +10,9 @@ const pause = (ms) => page.waitForTimeout(ms);
 const nav = (name) => page.getByRole("navigation", { name: "Main" }).getByRole("link", { name, exact: true });
 
 await page.goto("http://localhost:3000/");
-await page.getByLabel("Server address").fill("http://127.0.0.1:8000");
-await page.getByLabel("API key").fill("demo-key");
-await page.getByLabel(/Your name/).fill("Demo analyst");
-await page.getByRole("button", { name: "Connect" }).click();
+await page.getByLabel("Email").fill(process.env.DEMO_EMAIL ?? "demo@example.com");
+await page.getByLabel("Password").fill(process.env.DEMO_PASSWORD ?? "");
+await page.getByRole("button", { name: "Sign in", exact: true }).click();
 await page.getByRole("heading", { name: "Overview" }).waitFor();
 
 // 1. interception, played by typing, scam victim answering honestly

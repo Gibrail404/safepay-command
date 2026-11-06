@@ -13,5 +13,5 @@ if [ "$(curl -s -H 'X-API-Key: demo-key' http://127.0.0.1:8000/v1/cases/stats | 
   .venv/bin/python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key
 fi
 [ -d console/node_modules ] || (cd console && npm install)
-(cd console && npm run dev) & WEB=$!
-echo; echo "SafePay demo: http://localhost:3000  (server address http://127.0.0.1:8000, key demo-key, any name)"; wait
+(cd console && NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 npm run dev) & WEB=$!
+echo; echo "SafePay demo: http://localhost:3000  (create an account on the first screen; it joins the demo tenant)"; wait

@@ -13,3 +13,4 @@ console/node_modules
 console/.next
 deploy/demo_assets/*
 !deploy/demo_assets/.gitkeep
+.env.railway

@@ -1,6 +1,6 @@
 # Demo script (about 4 minutes)
 
-Setup once: `docker compose up -d db`, `bash scripts/dev_server.sh`, `python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key`, `cd console && npm run dev`. Open http://localhost:3000, connect with address `http://127.0.0.1:8000`, key `demo-key` (local development key), your name.
+Setup once: `docker compose up -d db`, `bash scripts/dev_server.sh`, `python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key`, `cd console && NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 npm run dev`. Open http://localhost:3000 and create an account (it joins the local demo tenant). The seed script still uses the local API key `demo-key`.
 
 | Time | Show | Say |
 |---|---|---|

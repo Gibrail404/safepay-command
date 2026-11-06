@@ -1,18 +1,48 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const API = "http://127.0.0.1:8100";
-async function connect(page: Page, key: string, name = "Tester") {
+const ACCOUNTS: Record<string, string> = { "e2e-admin": "admin@e2e.test", "e2e-viewer": "viewer@e2e.test", "empty-key": "empty@e2e.test" };
+async function signIn(page: Page, email: string, password = "test-password-1") {
   await page.goto("/");
-  await page.getByLabel("Server address").fill(API);
-  await page.getByLabel("API key").fill(key);
-  await page.getByLabel(/Your name/).fill(name);
-  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+}
+async function connect(page: Page, who: string, name = "Tester") {
+  await signIn(page, name === "Ana Analyst" ? "ana@e2e.test" : ACCOUNTS[who] ?? "nobody@e2e.test");
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Cases", exact: true }).click();      // the landing page is the overview; most tests start from the case queue
 }
 
-test("a wrong key shows a plain error, not a crash", async ({ page }) => {
-  await connect(page, "wrong-key");
-  await expect(page.getByRole("alert").first()).toContainText("The API key was not accepted");
+test("a wrong password shows a plain error and keeps you on the sign-in page", async ({ page }) => {
+  await signIn(page, "admin@e2e.test", "not-the-password");
+  await expect(page.locator(".error-text")).toContainText("wrong email or password");
+  await expect(page.getByRole("heading", { name: "Sign in to SafePay Command" })).toBeVisible();
+});
+
+test("creating an account signs you in and a reload keeps you signed in; sign out returns to the form", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("Your name").fill("New Person");
+  await page.getByLabel("Email").fill("new.person@e2e.test");
+  await page.getByLabel(/^Password/).fill("a-long-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByText("New Person (analyst)")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to SafePay Command" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Sign in to SafePay Command" })).toBeVisible();
+});
+
+test("signing up with an email that already exists says so", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("Your name").fill("Copy");
+  await page.getByLabel("Email").fill("admin@e2e.test");
+  await page.getByLabel(/^Password/).fill("a-long-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.locator(".error-text")).toContainText("already exists");
 });
 
 test("an account with no cases shows the empty state", async ({ page }) => {
@@ -80,8 +110,7 @@ test("on a phone-sized screen the page does not scroll sideways", async ({ page 
   await page.setViewportSize({ width: 375, height: 812 });
   await connect(page, "e2e-admin");
   await expect(page.getByRole("link", { name: "Fixture: second case" })).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), { timeout: 3000 }).toBeLessThanOrEqual(0);      // measured once the page has settled
 });
 
 
@@ -143,7 +172,7 @@ test("decision lab: a simulated result that moves when you move the slider", asy
 // These use the real risk model and real held-out transactions (so they need the project's data and trained model locally), with a scripted customer and no AI key.
 test("interception: an honest scam victim's answers get the payment held and the hidden truth is revealed", async ({ page }) => {
   await connect(page, "e2e-admin");
-  await page.getByRole("link", { name: "Interception" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Interception", exact: true }).click();
   await page.getByRole("radio", { name: /Scam victim who answers honestly/ }).click();
   await page.getByText("Play the customer for me").click();
   await page.getByRole("button", { name: "Start this payment" }).click();
@@ -157,7 +186,7 @@ test("interception: an honest scam victim's answers get the payment held and the
 
 test("interception: playing the customer by typing, a genuine payment is not held", async ({ page }) => {
   await connect(page, "e2e-admin");
-  await page.getByRole("link", { name: "Interception" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Interception", exact: true }).click();
   await page.getByRole("radio", { name: /Large payment to a new payee/ }).click();
   await page.getByRole("button", { name: "Start this payment" }).click();
   for (const a of ["I am paying my builder for the bathroom work.", "Yes, I have met him several times.", "No, there is no rush."]) {
@@ -172,7 +201,7 @@ test("interception: playing the customer by typing, a genuine payment is not hel
 
 test("interception: an ordinary payment goes straight to the policy with no questions", async ({ page }) => {
   await connect(page, "e2e-admin");
-  await page.getByRole("link", { name: "Interception" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Interception", exact: true }).click();
   await page.getByRole("radio", { name: /Ordinary payment to a known payee/ }).click();
   await page.getByText("Play the customer for me").click();
   await page.getByRole("button", { name: "Start this payment" }).click();
@@ -183,17 +212,13 @@ test("interception: an ordinary payment goes straight to the policy with no ques
 
 test("interception: a read-only role cannot start a payment", async ({ page }) => {
   await connect(page, "e2e-viewer");
-  await page.getByRole("link", { name: "Interception" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Interception", exact: true }).click();
   await expect(page.getByRole("button", { name: "Your role is read-only" })).toBeDisabled();
 });
 
 
 test("overview: real counts, the AI guardrail gauge and the open cases", async ({ page }) => {
-  await page.goto("/");
-  await page.getByLabel("Server address").fill(API);
-  await page.getByLabel("API key").fill("e2e-admin");
-  await page.getByLabel(/Your name/).fill("Tester");
-  await page.getByRole("button", { name: "Connect" }).click();
+  await signIn(page, "admin@e2e.test");
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByText("AI answers that passed the fact check on the first try.")).toBeVisible();
   await expect(page.getByRole("img", { name: /percent of AI answers passed the fact check first time|No AI summaries yet/ })).toBeVisible();
@@ -203,11 +228,7 @@ test("overview: real counts, the AI guardrail gauge and the open cases", async (
 });
 
 test("overview: an account with no activity shows empty states, not made-up numbers", async ({ page }) => {
-  await page.goto("/");
-  await page.getByLabel("Server address").fill(API);
-  await page.getByLabel("API key").fill("empty-key");
-  await page.getByLabel(/Your name/).fill("Tester");
-  await page.getByRole("button", { name: "Connect" }).click();
+  await signIn(page, "empty@e2e.test");
   await expect(page.getByText("Nothing was recorded in the last 24 hours.")).toBeVisible();
   await expect(page.getByText(/No payment decisions yet/)).toBeVisible();
   await expect(page.getByRole("img", { name: "No AI summaries yet" })).toBeVisible();

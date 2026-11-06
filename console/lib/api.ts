@@ -1,8 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
-export type Config = { url: string; key: string; actor: string };
-export const STORAGE_KEY = "safepay-console-config";
+export type Config = { token: string; actor: string };
+export const STORAGE_KEY = "safepay-console-session";
+export const SIGNED_OUT_EVENT = "safepay-signed-out";
+// The server is fixed at build time. Local development sets NEXT_PUBLIC_API_URL; otherwise this is the hosted server.
+export const SERVER = (process.env.NEXT_PUBLIC_API_URL || "https://safepay-command-production.up.railway.app").replace(/\/$/, "");
 
 export class ApiError extends Error {
   status: number;
@@ -10,7 +13,7 @@ export class ApiError extends Error {
 }
 
 function friendly(status: number, detail: unknown): string {
-  if (status === 401) return "The API key was not accepted. Check it in the connection settings.";
+  if (status === 401) return "Your session has ended. Sign in again.";
   if (status === 403) return "Your role does not allow this action.";
   if (status === 429) return "Too many requests. Wait a moment and try again.";
   if (status === 404) return "Not found.";
@@ -23,20 +26,43 @@ function friendly(status: number, detail: unknown): string {
 export async function call<T>(cfg: Config, path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(cfg.url.replace(/\/$/, "") + path, {
+    res = await fetch(SERVER + path, {
       method: init.method ?? "GET",
-      headers: { "X-API-Key": cfg.key, "X-Actor": cfg.actor || "analyst", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers ?? {}) },
+      headers: { Authorization: "Bearer " + cfg.token, "X-Actor": cfg.actor || "analyst", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers ?? {}) },
       body: init.body ? JSON.stringify(init.body) : undefined,
     });
   } catch {
-    throw new ApiError(0, "Cannot reach the server. Check the address in the connection settings and that the server is running.");
+    throw new ApiError(0, "Cannot reach the server. Check your connection and try again in a moment.");
   }
   if (!res.ok) {
     let detail: unknown = null;
     try { detail = (await res.json()).detail; } catch { /* no body */ }
+    if (res.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event(SIGNED_OUT_EVENT));      // an expired or revoked session sends the person back to the sign-in page
     throw new ApiError(res.status, friendly(res.status, detail));
   }
   return res.json() as Promise<T>;
+}
+
+export type Session = { token: string; user: { email: string; name: string; tenant: string; role: string } };
+
+/** Sign in or create an account. The server's own wording is shown for these (wrong password, email already used), because it is written for people. */
+export async function authenticate(mode: "login" | "signup", body: { email: string; password: string; name?: string }): Promise<Session> {
+  let res: Response;
+  try {
+    res = await fetch(SERVER + "/v1/auth/" + mode, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    throw new ApiError(0, "Cannot reach the server. Check your connection and try again in a moment.");
+  }
+  if (!res.ok) {
+    let detail: unknown = null;
+    try { detail = (await res.json()).detail; } catch { /* no body */ }
+    throw new ApiError(res.status, typeof detail === "string" ? detail : res.status === 429 ? "Too many attempts. Wait a minute and try again." : "That did not work. Check what you entered.");
+  }
+  return res.json() as Promise<Session>;
+}
+
+export async function signOutOnServer(cfg: Config): Promise<void> {
+  try { await fetch(SERVER + "/v1/auth/logout", { method: "POST", headers: { Authorization: "Bearer " + cfg.token } }); } catch { /* the local sign-out still happens */ }
 }
 
 export function useApi<T>(cfg: Config | null, path: string | null) {

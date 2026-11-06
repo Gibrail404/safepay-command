@@ -20,6 +20,10 @@ class Settings:
     policy_dir: Path = ROOT / "config" / "policies"
     ollama_api_key: str = ""
     cors_origins: tuple = ()
+    signup_tenant: str = ""                                       # sign-up is open only when this names the tenant new accounts join (always as analyst); empty means sign-up is closed
+    max_users: int = 500                                          # a hard cap on accounts, so open sign-up cannot grow the database without limit
+    auth_rate_per_s: float = 0.1                                  # sign-in and sign-up attempts per second per client address (0 turns the limit off)
+    auth_burst: int = 8
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -32,7 +36,9 @@ class Settings:
                    rate_per_s=float(os.environ.get("SAFEPAY_RATE_PER_S", 30)), rate_burst=int(os.environ.get("SAFEPAY_RATE_BURST", 60)),
                    capability_secret=secret.encode() if secret else secrets.token_bytes(32),
                    policy_dir=Path(os.environ.get("SAFEPAY_POLICY_DIR", ROOT / "config" / "policies")), ollama_api_key=os.environ.get("OLLAMA_API_KEY", ""),
-                   cors_origins=tuple(o for o in os.environ.get("SAFEPAY_CORS_ORIGINS", "").split(",") if o))
+                   cors_origins=tuple(o for o in os.environ.get("SAFEPAY_CORS_ORIGINS", "").split(",") if o),
+                   signup_tenant=os.environ.get("SAFEPAY_SIGNUP_TENANT", ""), max_users=int(os.environ.get("SAFEPAY_MAX_USERS", 500)),
+                   auth_rate_per_s=float(os.environ.get("SAFEPAY_AUTH_RATE_PER_S", 0.1)), auth_burst=int(os.environ.get("SAFEPAY_AUTH_BURST", 8)))
 
 
 class PolicyStore:

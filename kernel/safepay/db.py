@@ -147,6 +147,27 @@ class InterceptionRow(Base):
     created: Mapped[str] = mapped_column(String(40))
 
 
+class UserRow(Base):
+    """A person who signed up or was added by an admin. Only a salted scrypt hash of the password is stored."""
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    name: Mapped[str] = mapped_column(String(64))
+    pw_salt: Mapped[str] = mapped_column(String(64))
+    pw_hash: Mapped[str] = mapped_column(String(128))
+    tenant: Mapped[str] = mapped_column(String(64))
+    role: Mapped[str] = mapped_column(String(16))
+    created: Mapped[str] = mapped_column(String(40))
+
+
+class SessionRow(Base):
+    """A sign-in. The token itself is never stored, only its SHA-256, so a database leak does not hand out working sessions."""
+    __tablename__ = "sessions"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    expires: Mapped[float] = mapped_column(Float)
+
+
 def make_engine(url: str = "sqlite+pysqlite:///:memory:"):
     if url.startswith("sqlite") and ":memory:" in url:
         return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)

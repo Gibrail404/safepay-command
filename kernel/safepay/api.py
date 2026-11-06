@@ -3,12 +3,12 @@ from __future__ import annotations
 import hmac, json, re, threading, time, uuid
 from pathlib import Path
 from typing import Literal
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from . import cases as case_svc, ledger
+from . import accounts, cases as case_svc, ledger
 from .agents.investigator import investigate_traced
 from . import interception as icp, interception_deps as icp_deps, overview as overview_svc
 from .llm.budget_db import DbBudget
@@ -64,6 +64,21 @@ class AnswerIn(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
 
+class SignupIn(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    name: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=128)
+
+
+class NewUserIn(SignupIn):
+    role: Literal["viewer", "analyst", "admin"] = "analyst"
+
+
 class SimulationIn(BaseModel):
     warn_from: float = Field(ge=-10, le=100)
     hold_from: float = Field(ge=-10, le=100)
@@ -100,7 +115,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     app = FastAPI(title="SafePay Command kernel", version="0.3.0")
     if settings.cors_origins:
         from fastapi.middleware.cors import CORSMiddleware
-        app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST"], allow_headers=["X-API-Key", "X-Actor", "Idempotency-Key", "Content-Type", "X-Capability"])
+        app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST"], allow_headers=["X-API-Key", "Authorization", "X-Actor", "Idempotency-Key", "Content-Type", "X-Capability"])
     if llm is None:
         from .llm.providers import OllamaCloudProvider
         chain = [OllamaCloudProvider(settings.ollama_api_key, m) for m in ("gemma4:31b", "deepseek-v4.1-flash")] if settings.ollama_api_key else []
@@ -146,7 +161,19 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
 
     limiter = _Limiter(settings.rate_per_s, settings.rate_burst)
 
-    def principal(x_api_key: str | None) -> tuple[str, str]:
+    def bearer(authorization: str | None) -> str | None:
+        return authorization[7:].strip() if authorization and authorization[:7].lower() == "bearer " else None
+
+    def principal(x_api_key: str | None, authorization: str | None = None) -> tuple[str, str]:
+        token = bearer(authorization)
+        if token is not None:                                      # a signed-in person: the tenant and role come from their account, never from the request
+            who = accounts.session_user(sf, token)
+            if who is None:
+                raise HTTPException(401, "your session has ended; sign in again")
+            wait = limiter.wait_needed("user:" + who["id"])
+            if wait > 0:
+                raise HTTPException(429, "too many requests", headers={"Retry-After": str(max(1, int(wait + 0.999)))})
+            return who["tenant"], who["role"]
         tenant, matched = None, ""
         for known, t in settings.tenants.items():          # constant-time comparison so response time does not reveal how much of a key matched
             if hmac.compare_digest(known.encode(), (x_api_key or "").encode()):
@@ -159,8 +186,8 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return tenant, settings.roles.get(matched, "admin")
 
     def auth(minimum: str):
-        def dep(x_api_key: str | None = Header(default=None)) -> str:
-            tenant, role = principal(x_api_key)
+        def dep(x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)) -> str:
+            tenant, role = principal(x_api_key, authorization)
             if ROLE_RANK[role] < ROLE_RANK[minimum]:
                 raise HTTPException(403, f"this action needs the {minimum} role")
             return tenant
@@ -169,9 +196,62 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
     tenant_of, analyst_of, admin_of = auth("viewer"), auth("analyst"), auth("admin")
 
     @app.get("/v1/whoami")
-    def whoami(x_api_key: str | None = Header(default=None)):
-        tenant, role = principal(x_api_key)
-        return {"tenant": tenant, "role": role}
+    def whoami(x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)):
+        tenant, role = principal(x_api_key, authorization)
+        token = bearer(authorization)
+        who = accounts.session_user(sf, token) if token else None
+        return {"tenant": tenant, "role": role, **({"name": who["name"], "email": who["email"]} if who else {})}
+
+    auth_limiter = _Limiter(settings.auth_rate_per_s, settings.auth_burst)
+
+    def sign_in_limit(request: Request) -> None:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()       # the last entry is the one our own proxy recorded; earlier entries can be forged by the client
+        wait = auth_limiter.wait_needed("ip:" + (forwarded or (request.client.host if request.client else "?")))
+        if wait > 0:
+            raise HTTPException(429, "too many sign-in attempts; wait a minute and try again", headers={"Retry-After": str(max(1, int(wait + 0.999)))})
+
+    def session_reply(user: dict) -> dict:
+        return {"token": accounts.start_session(sf, user), "expires_in": accounts.SESSION_TTL_S, "user": {k: user[k] for k in ("email", "name", "tenant", "role")}}
+
+    def make_user(body: SignupIn, tenant: str, role: str) -> dict:
+        try:
+            return accounts.create_user(sf, body.email, body.name, body.password, tenant, role, settings.max_users)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except accounts.EmailTaken:
+            raise HTTPException(409, "an account with this email already exists; sign in instead")
+        except accounts.SignupFull:
+            raise HTTPException(403, "this demo has reached its account limit")
+
+    @app.post("/v1/auth/signup", dependencies=[Depends(sign_in_limit)])
+    def signup(body: SignupIn):
+        if not settings.signup_tenant:
+            raise HTTPException(403, "sign-up is not open on this server")
+        return session_reply(make_user(body, settings.signup_tenant, "analyst"))      # open sign-up never grants admin
+
+    @app.post("/v1/auth/login", dependencies=[Depends(sign_in_limit)])
+    def login(body: LoginIn):
+        try:
+            return session_reply(accounts.login(sf, body.email, body.password))
+        except accounts.BadLogin:
+            raise HTTPException(401, "wrong email or password")
+
+    @app.post("/v1/auth/logout")
+    def logout(authorization: str | None = Header(default=None)):
+        token = bearer(authorization)
+        if token:
+            accounts.end_session(sf, token)
+        return {"ok": True}
+
+    @app.post("/v1/auth/users")
+    def add_user(body: NewUserIn, tenant: str = Depends(admin_of)):
+        u = make_user(body, tenant, body.role)                  # an admin adds people to their own tenant only
+        return {k: u[k] for k in ("email", "name", "tenant", "role")}
+
+    def actor_of(x_actor: str | None, authorization: str | None) -> str | None:
+        token = bearer(authorization)
+        who = accounts.session_user(sf, token) if token else None
+        return who["name"] if who else x_actor                  # a signed-in person's decisions carry their account name, not a header they could change
 
     def need_key(idempotency_key: str | None) -> str:
         if not idempotency_key or not KEY_FORMAT.match(idempotency_key):
@@ -359,7 +439,8 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return {**summary.model_dump(), "priority": priority, **meta}
 
     @app.post("/v1/cases/{case_id}/disposition")
-    def disposition_case(case_id: str, body: case_svc.DispositionIn, tenant: str = Depends(analyst_of), x_actor: str | None = Header(default=None)):
+    def disposition_case(case_id: str, body: case_svc.DispositionIn, tenant: str = Depends(analyst_of), x_actor: str | None = Header(default=None), authorization: str | None = Header(default=None)):
+        x_actor = actor_of(x_actor, authorization)
         if not x_actor or len(x_actor) > 64:
             raise HTTPException(400, "X-Actor header is required to record who decided (max 64 characters)")
         try:
@@ -447,7 +528,8 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
         return gateway.list_approvals(tenant, status)
 
     @app.post("/v1/approvals/{approval_id}/decision")
-    def decide(approval_id: str, body: ApprovalIn, tenant: str = Depends(analyst_of), x_actor: str | None = Header(default=None)):
+    def decide(approval_id: str, body: ApprovalIn, tenant: str = Depends(analyst_of), x_actor: str | None = Header(default=None), authorization: str | None = Header(default=None)):
+        x_actor = actor_of(x_actor, authorization)
         if not x_actor:
             raise HTTPException(400, "X-Actor header is required to record who decided")
         try:
