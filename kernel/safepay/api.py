@@ -112,6 +112,7 @@ def create_app(settings: Settings | None = None, registry: ToolRegistry | None =
             pass
     decisions = DecisionService(sf, store.for_workload)
     gateway = ToolGateway(sf, registry, settings.capability_secret)
+    gateway.recover_stuck()                 # calls a crashed process left half-done become 'unknown' instead of staying 'running' forever
     app = FastAPI(title="SafePay Command kernel", version="0.3.0")
     if settings.cors_origins:
         from fastapi.middleware.cors import CORSMiddleware

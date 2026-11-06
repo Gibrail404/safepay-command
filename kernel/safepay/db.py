@@ -66,6 +66,8 @@ class ToolCallRow(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128))
     args_hash: Mapped[str] = mapped_column(String(64))
     result: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(12), default="done", server_default="done")      # running (intent recorded, handler not finished) | done | unknown (a run that never reported back)
+    started: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")             # epoch seconds when the call was claimed
     __table_args__ = (UniqueConstraint("tenant", "tool", "idempotency_key", name="uq_toolcall_idem"),)
 
 
@@ -175,7 +177,8 @@ def make_engine(url: str = "sqlite+pysqlite:///:memory:"):
 
 
 _ADDED_COLUMNS = ["ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS ai_recommendation VARCHAR(16)", "ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS overrode_ai BOOLEAN DEFAULT FALSE",
-                  "ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS override_reason VARCHAR(500)"]
+                  "ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS override_reason VARCHAR(500)",
+                  "ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS status VARCHAR(12) NOT NULL DEFAULT 'done'", "ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS started DOUBLE PRECISION NOT NULL DEFAULT 0"]
 
 
 def init_db(engine) -> sessionmaker[Session]:

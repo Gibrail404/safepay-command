@@ -1,10 +1,13 @@
 """Invariants 1 (no T2/T3 without approval or rule) and 7 (shadow mode has no side effects), plus capability checks and idempotency."""
 import time
+from concurrent.futures import ThreadPoolExecutor
 import pytest
+from sqlalchemy import select
 from hypothesis import given, settings, strategies as st
 from pydantic import BaseModel
 from safepay import ledger
-from safepay.db import init_db, make_engine
+from conftest import TEST_DB_URL
+from safepay.db import ApprovalRow, ToolCallRow, init_db, make_engine
 from safepay.tools import CapabilityError, Tool, ToolGateway, ToolRegistry, mint_capability, verify_capability
 
 SECRET = b"test-secret-not-for-production"
@@ -116,7 +119,7 @@ def test_every_outcome_lands_in_a_verifiable_ledger(sf):
     with sf() as s:
         r = ledger.verify(s, "t1")
         kinds = [e.kind for e in ledger.entries(s, "t1")]
-    assert r.ok and kinds == ["tool.executed", "tool.approval_required", "tool.denied"]
+    assert r.ok and kinds == ["tool.started", "tool.executed", "tool.approval_required", "tool.denied"]
 
 
 def test_shadow_mode_never_runs_a_handler_even_with_approval(sf):
@@ -150,3 +153,163 @@ def test_property_no_t2_t3_execution_without_approval_or_policy_rule(steps):
         if ran:
             assert tier in ("T0", "T1") or (tier == "T2" and (pre or approve_first)) or (tier == "T3" and approve_first)
             assert res.status in ("executed", "replayed")
+
+
+# --- the three-step call: intent is committed, the handler runs with no transaction open, then the result is committed ---
+
+class SimulatedCrash(BaseException):
+    """Stands in for the process dying: it is not an Exception, so the gateway's failure handling does not run, exactly as if the process had been killed."""
+
+
+class Clock:
+    def __init__(self):
+        self.t = 1_000_000.0
+
+    def __call__(self):
+        return self.t
+
+
+def gateway_with(sf, handler, lease_s=300.0, clock=None):
+    reg = ToolRegistry()
+    for tier in ("T1", "T3"):
+        reg.register(Tool(name=f"tool_{tier}", tier=tier, input_model=Args, handler=handler))
+    return ToolGateway(sf, reg, SECRET, lease_s=lease_s, clock=clock or Clock())
+
+
+def kinds_of(sf, tenant="t1"):
+    with sf() as s:
+        return [e.kind for e in ledger.entries(s, tenant)]
+
+
+def approve_one(gw, tool="tool_T3", pid="p"):
+    first = gw.call("t1", token(), tool, {"payment_id": pid}, "ask")
+    gw.decide_approval("t1", first.approval_id, "boss", True)
+    return first.approval_id
+
+
+def test_a_crash_between_intent_and_result_never_runs_the_tool_twice(sf):
+    clock, ran = Clock(), []
+
+    def handler(a):
+        ran.append(a.payment_id)
+        raise SimulatedCrash()
+
+    gw = gateway_with(sf, handler, clock=clock)
+    with pytest.raises(SimulatedCrash):
+        gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "k")
+    assert kinds_of(sf) == ["tool.started"]                              # the intent is on the record, the outcome is not
+    again = gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "k")
+    assert again.status == "denied" and "already running" in again.reason and ran == ["p"]
+    clock.t += 301                                                       # the lease has passed: the outcome is now unknown, and it stays unknown
+    late = gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "k")
+    assert late.status == "denied" and "unknown" in late.reason and ran == ["p"]
+    assert gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "k").status == "denied" and kinds_of(sf).count("tool.unknown_outcome") == 1 and ran == ["p"]
+    with sf() as s:
+        assert ledger.verify(s, "t1").ok
+
+
+def test_the_recovery_sweep_only_touches_calls_older_than_the_lease(sf):
+    clock = Clock()
+
+    def handler(a):
+        raise SimulatedCrash()
+
+    gw = gateway_with(sf, handler, lease_s=60, clock=clock)
+    with pytest.raises(SimulatedCrash):
+        gw.call("t1", token(), "tool_T1", {"payment_id": "old"}, "old")
+    clock.t += 50
+    with pytest.raises(SimulatedCrash):
+        gw.call("t1", token(), "tool_T1", {"payment_id": "new"}, "new")
+    clock.t += 20                                                        # old is 70 s old, new is 20 s old
+    assert gw.recover_stuck() == 1 and gw.recover_stuck() == 0
+    with sf() as s:
+        status = {r.idempotency_key: r.status for r in s.scalars(select(ToolCallRow))}
+    assert status == {"old": "unknown", "new": "running"}
+
+
+def test_a_handler_that_raises_frees_the_key_and_the_approval_for_a_retry(sf):
+    attempts = []
+
+    def handler(a):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("customer 4111-1111 not found")
+        return {"ok": True}
+
+    gw = gateway_with(sf, handler)
+    approval_id = approve_one(gw)
+    failed = gw.call("t1", token(), "tool_T3", {"payment_id": "p"}, "k")
+    assert failed.status == "failed"
+    with sf() as s:
+        assert s.get(ApprovalRow, approval_id).status == "approved" and s.scalar(select(ToolCallRow)) is None
+        failure = [e for e in ledger.entries(s, "t1") if e.kind == "tool.failed"][0]
+    assert "RuntimeError" in failure.payload and "4111" not in failure.payload      # the class name is recorded, the message (which may hold customer data) is not
+    assert gw.call("t1", token(), "tool_T3", {"payment_id": "p"}, "k").status == "executed" and len(attempts) == 2
+    with sf() as s:
+        assert s.get(ApprovalRow, approval_id).status == "used" and ledger.verify(s, "t1").ok
+    assert kinds_of(sf) == ["tool.approval_required", "approval.decided", "tool.started", "tool.failed", "tool.started", "tool.executed"]
+
+
+def test_an_approval_consumed_by_a_crashed_call_is_not_given_back(sf):
+    def handler(a):
+        raise SimulatedCrash()
+
+    gw = gateway_with(sf, handler)
+    approval_id = approve_one(gw)
+    with pytest.raises(SimulatedCrash):
+        gw.call("t1", token(), "tool_T3", {"payment_id": "p"}, "k")
+    with sf() as s:
+        assert s.get(ApprovalRow, approval_id).status == "used"
+    assert gw.call("t1", token(), "tool_T3", {"payment_id": "p"}, "k2").status == "approval_required"      # a new key needs a new human decision
+
+
+def test_a_slow_handler_that_finishes_after_the_sweep_still_records_its_result(sf):
+    clock = Clock()
+    holder = {}
+
+    def handler(a):
+        clock.t += 400                                                   # the tool is slower than the lease
+        holder["gw"].recover_stuck()                                     # another process's sweep marks it unknown meanwhile
+        return {"done": a.payment_id}
+
+    gw = holder["gw"] = gateway_with(sf, handler, clock=clock)
+    assert gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "k").status == "executed"
+    again = gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "k")
+    assert again.status == "replayed" and again.result == {"done": "p"}
+    assert kinds_of(sf) == ["tool.started", "tool.unknown_outcome", "tool.executed"]
+
+
+@pytest.mark.skipif(not TEST_DB_URL.startswith("postgresql"), reason="needs a database where a second connection sees only committed data")
+def test_while_the_handler_runs_the_intent_is_already_committed_and_no_transaction_is_open(sf):
+    seen = {}
+
+    def handler(a):
+        with sf() as other:                                              # a different connection: it sees only what the gateway has committed
+            row = other.scalar(select(ToolCallRow))
+            seen["status"] = row.status if row else None
+            seen["kinds"] = [e.kind for e in ledger.entries(other, "t1")]
+            ledger.append(other, "t1", "probe", {"during": "handler"})   # and it can write the ledger: no lock is held on it
+            other.commit()
+        return {"ok": True}
+
+    assert gateway_with(sf, handler).call("t1", token(), "tool_T1", {"payment_id": "p"}, "k").status == "executed"
+    assert seen == {"status": "running", "kinds": ["tool.started"]}
+    with sf() as s:
+        assert ledger.verify(s, "t1").ok and kinds_of(sf) == ["tool.started", "probe", "tool.executed"]
+
+
+@pytest.mark.skipif(not TEST_DB_URL.startswith("postgresql"), reason="needs PostgreSQL")
+def test_simultaneous_calls_with_one_key_run_a_slow_tool_once_and_the_rest_are_turned_away(sf):
+    ran = []
+
+    def handler(a):
+        ran.append(1)
+        time.sleep(0.4)
+        return {"ok": True}
+
+    gw = gateway_with(sf, handler)
+    with ThreadPoolExecutor(6) as ex:
+        out = list(ex.map(lambda _: gw.call("t1", token(), "tool_T1", {"payment_id": "p"}, "same").status, range(6)))
+    assert len(ran) == 1 and out.count("executed") == 1 and set(out) <= {"executed", "denied", "replayed"}
+    with sf() as s:
+        assert ledger.verify(s, "t1").ok

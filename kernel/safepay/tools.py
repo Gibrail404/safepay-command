@@ -1,11 +1,19 @@
 """Tool gateway: the only way an agent can act. Checks a signed capability, validates arguments, enforces risk tiers and approvals,
-honours shadow mode, and makes every call idempotent and ledgered."""
+honours shadow mode, and makes every call idempotent and ledgered.
+
+A call runs in three steps so that no database transaction is open while a tool runs (an outbox-style intent record):
+  1. one short transaction claims the idempotency key, consumes the approval and ledgers `tool.started` (the intent);
+  2. the handler runs with no transaction open;
+  3. a second short transaction stores the result and ledgers `tool.executed` (or `tool.failed` and releases the claim).
+If the process dies between 1 and 3 the call stays `running`; once the lease passes it is marked `unknown` and is never run again by itself:
+a payment tool cannot know whether its effect happened, so a person checks and retries with a new idempotency key (at most once, never twice).
+A handler must raise only when it did nothing, because a raise releases the key for a retry."""
 from __future__ import annotations
 import base64, hashlib, hmac, json, time, uuid
 from dataclasses import dataclass
 from typing import Callable, Literal
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from . import ledger
@@ -71,15 +79,21 @@ def verify_capability(secret: bytes, token: str, now: float | None = None) -> di
 
 
 class CallResult(BaseModel):
-    status: Literal["executed", "replayed", "approval_required", "denied", "shadow_skipped"]
+    status: Literal["executed", "replayed", "approval_required", "denied", "shadow_skipped", "failed"]
     result: dict | None = None
     approval_id: str | None = None
     reason: str | None = None
 
 
+@dataclass(frozen=True)
+class _Claimed:
+    """Step 1 finished: this caller owns the key and may run the handler."""
+    approval_id: str | None
+
+
 class ToolGateway:
-    def __init__(self, sf: sessionmaker[Session], registry: ToolRegistry, secret: bytes):
-        self.sf, self.registry, self.secret = sf, registry, secret
+    def __init__(self, sf: sessionmaker[Session], registry: ToolRegistry, secret: bytes, lease_s: float = 300.0, clock: Callable[[], float] = time.time):
+        self.sf, self.registry, self.secret, self.lease_s, self.clock = sf, registry, secret, lease_s, clock
 
     def _log(self, s: Session, tenant: str, kind: str, payload: dict) -> None:
         ledger.append(s, tenant, kind, payload)
@@ -101,34 +115,57 @@ class ToolGateway:
             return self._deny(tenant, tool_name, "invalid arguments", cap["run"])
         args_hash = ledger.sha256_hex(ledger.canonical_json(parsed.model_dump(mode="json")))
 
+        step1 = self._claim(tenant, tool, cap["run"], args_hash, idempotency_key, mode, policy_pre_approved)
+        if isinstance(step1, CallResult):
+            return step1
+        try:
+            result_json = ledger.canonical_json(tool.handler(parsed))        # no transaction is open here: a slow tool holds no connection and no lock
+        except Exception as e:
+            return self._release(tenant, tool, cap["run"], args_hash, idempotency_key, step1.approval_id, e)
         with self.sf.begin() as s:
-            prior = s.scalar(select(ToolCallRow).where(ToolCallRow.tenant == tenant, ToolCallRow.tool == tool_name, ToolCallRow.idempotency_key == idempotency_key))
+            row = s.scalar(select(ToolCallRow).where(ToolCallRow.tenant == tenant, ToolCallRow.tool == tool.name, ToolCallRow.idempotency_key == idempotency_key))
+            row.status, row.result = "done", result_json                      # also fixes a row the recovery sweep had already marked unknown: the result is now known
+            self._log(s, tenant, "tool.executed", {"tool": tool.name, "tier": tool.tier, "run": cap["run"], "args_hash": args_hash,
+                                                   "result_hash": ledger.sha256_hex(result_json), "approval_id": step1.approval_id})
+        return CallResult(status="executed", result=json.loads(result_json))
+
+    def _claim(self, tenant: str, tool: Tool, run: str, args_hash: str, key: str, mode: str, pre_approved: bool) -> "CallResult | _Claimed":
+        """Step 1: decide whether this call may run and, if so, record the intent. One short transaction."""
+        with self.sf.begin() as s:
+            prior = s.scalar(select(ToolCallRow).where(ToolCallRow.tenant == tenant, ToolCallRow.tool == tool.name, ToolCallRow.idempotency_key == key))
             if prior:
                 if prior.args_hash != args_hash:
-                    self._log(s, tenant, "tool.denied", {"tool": tool_name, "run": cap["run"], "reason": "idempotency key reused with different arguments"})
+                    self._log(s, tenant, "tool.denied", {"tool": tool.name, "run": run, "reason": "idempotency key reused with different arguments"})
                     return CallResult(status="denied", reason="idempotency key reused with different arguments")
-                return CallResult(status="replayed", result=json.loads(prior.result))
+                if prior.status == "done":
+                    return CallResult(status="replayed", result=json.loads(prior.result))
+                if prior.status == "running" and self.clock() - prior.started >= self.lease_s:
+                    prior.status = "unknown"
+                    self._log(s, tenant, "tool.unknown_outcome", {"tool": tool.name, "run": run, "args_hash": args_hash, "started": prior.started})
+                if prior.status == "running":
+                    return CallResult(status="denied", reason="a call with this idempotency key is already running")
+                return CallResult(status="denied", reason="an earlier attempt with this key never reported back, so whether it acted is unknown; check, then retry with a new idempotency key")
 
             approval = None
-            allowed = tool.tier in ("T0", "T1") or (tool.tier == "T2" and policy_pre_approved)     # T3 is never allowed by policy alone
+            allowed = tool.tier in ("T0", "T1") or (tool.tier == "T2" and pre_approved)     # T3 is never allowed by policy alone
             if not allowed:
-                approval = s.scalar(select(ApprovalRow).where(ApprovalRow.tenant == tenant, ApprovalRow.tool == tool_name,
+                approval = s.scalar(select(ApprovalRow).where(ApprovalRow.tenant == tenant, ApprovalRow.tool == tool.name,
                                                               ApprovalRow.args_hash == args_hash, ApprovalRow.status == "approved"))
                 allowed = approval is not None
             if not allowed:
-                pending = s.scalar(select(ApprovalRow).where(ApprovalRow.tenant == tenant, ApprovalRow.tool == tool_name,
+                pending = s.scalar(select(ApprovalRow).where(ApprovalRow.tenant == tenant, ApprovalRow.tool == tool.name,
                                                              ApprovalRow.args_hash == args_hash, ApprovalRow.status == "pending"))
                 if pending is None:
-                    pending = ApprovalRow(id="a_" + uuid.uuid4().hex[:12], tenant=tenant, tool=tool_name, args_hash=args_hash, status="pending")
+                    pending = ApprovalRow(id="a_" + uuid.uuid4().hex[:12], tenant=tenant, tool=tool.name, args_hash=args_hash, status="pending")
                     s.add(pending)
-                self._log(s, tenant, "tool.approval_required", {"tool": tool_name, "tier": tool.tier, "run": cap["run"], "args_hash": args_hash, "approval_id": pending.id})
+                self._log(s, tenant, "tool.approval_required", {"tool": tool.name, "tier": tool.tier, "run": run, "args_hash": args_hash, "approval_id": pending.id})
                 return CallResult(status="approval_required", approval_id=pending.id, reason=f"{tool.tier} action needs a human approval")
 
             if mode == "shadow":                                  # a shadow run decides everything except it never acts
-                self._log(s, tenant, "tool.shadow", {"tool": tool_name, "tier": tool.tier, "run": cap["run"], "args_hash": args_hash})
+                self._log(s, tenant, "tool.shadow", {"tool": tool.name, "tier": tool.tier, "run": run, "args_hash": args_hash})
                 return CallResult(status="shadow_skipped")
 
-            s.add(ToolCallRow(tenant=tenant, tool=tool_name, idempotency_key=idempotency_key, args_hash=args_hash, result=""))   # claim the key first
+            s.add(ToolCallRow(tenant=tenant, tool=tool.name, idempotency_key=key, args_hash=args_hash, result="", status="running", started=self.clock()))   # claim the key first
             try:
                 s.flush()
             except IntegrityError:
@@ -140,12 +177,27 @@ class ToolGateway:
                 if used != 1:
                     s.rollback()
                     return CallResult(status="denied", reason="the approval was already used")
-            result = tool.handler(parsed)
-            row = s.scalar(select(ToolCallRow).where(ToolCallRow.tenant == tenant, ToolCallRow.tool == tool_name, ToolCallRow.idempotency_key == idempotency_key))
-            row.result = ledger.canonical_json(result)
-            self._log(s, tenant, "tool.executed", {"tool": tool_name, "tier": tool.tier, "run": cap["run"], "args_hash": args_hash,
-                                                   "result_hash": ledger.sha256_hex(row.result), "approval_id": approval.id if approval else None})
-            return CallResult(status="executed", result=result)
+            self._log(s, tenant, "tool.started", {"tool": tool.name, "tier": tool.tier, "run": run, "args_hash": args_hash, "approval_id": approval.id if approval else None})
+            return _Claimed(approval.id if approval else None)
+
+    def _release(self, tenant: str, tool: Tool, run: str, args_hash: str, key: str, approval_id: str | None, error: Exception) -> CallResult:
+        """The handler raised, so by contract it did nothing: free the key and give the approval back so the call can be retried, and ledger the failure."""
+        with self.sf.begin() as s:
+            s.execute(delete(ToolCallRow).where(ToolCallRow.tenant == tenant, ToolCallRow.tool == tool.name, ToolCallRow.idempotency_key == key, ToolCallRow.status == "running"))
+            if approval_id:
+                s.execute(update(ApprovalRow).where(ApprovalRow.id == approval_id, ApprovalRow.status == "used").values(status="approved"))
+            self._log(s, tenant, "tool.failed", {"tool": tool.name, "run": run, "args_hash": args_hash, "error": type(error).__name__})      # the class name only: messages can carry customer data
+        return CallResult(status="failed", reason="the tool failed; nothing was recorded as done and the call can be retried with the same idempotency key")
+
+    def recover_stuck(self) -> int:
+        """Marks calls that began longer than the lease ago and never reported back as `unknown`. Run at start-up; a call is also checked when its key is used again."""
+        n = 0
+        with self.sf.begin() as s:
+            for row in s.scalars(select(ToolCallRow).where(ToolCallRow.status == "running", ToolCallRow.started <= self.clock() - self.lease_s)):
+                row.status = "unknown"
+                self._log(s, row.tenant, "tool.unknown_outcome", {"tool": row.tool, "args_hash": row.args_hash, "started": row.started})
+                n += 1
+        return n
 
     def _deny(self, tenant: str, tool: str, reason: str, run: str | None) -> CallResult:
         with self.sf.begin() as s:

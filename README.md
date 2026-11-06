@@ -18,7 +18,7 @@ An AI decision platform for payment risk, sanctions screening and fraud investig
 
 | Part | What it does | Evidence |
 |---|---|---|
-| Kernel | Hash-chained tamper-evident ledger, idempotent and replayable decisions, deterministic policy engine, tool gateway with risk tiers, signed capabilities and one-use approvals | tests, including race tests on PostgreSQL |
+| Kernel | Hash-chained tamper-evident ledger, idempotent and replayable decisions, deterministic policy engine, tool gateway with risk tiers, signed capabilities, one-use approvals and an intent-then-execute-then-result call that holds no database transaction while a tool runs (at most once, with crash recovery) | tests, including race tests on PostgreSQL |
 | Risk and scam-text models | Calibrated transaction-risk model (LightGBM, PyTorch MLP, logistic regression) and a scam-like text model | `docs/reports/risk_model.md`, `text_model.md` (real data) |
 | LLM steps | Model gateway (redaction, injection screening, validation, budgets, provider fallback), Questioner, Explainer and Investigator agents, deterministic faithfulness checker | `docs/reports/llm_eval.md`, `sandbox.md` |
 | Screening | OFAC name matching with a policy and an adjudicator that can explain but never clear a hit | `docs/reports/screening.md` (real data) |
