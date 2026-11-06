@@ -1,6 +1,6 @@
 # Deploying SafePay Command
 
-**Currently deployed (free tiers):** console on Vercel (`https://safepay-command.vercel.app`), API on Railway (`https://safepay-command-production.up.railway.app`, built from this repository's `Dockerfile`, **without** the demo assets), database on Neon (PostgreSQL, US East). `scripts/check_deploy.py` passes every required check against it.
+**Currently deployed (free tiers):** console on Vercel (`https://safepay-command.vercel.app`), API on Railway (`https://safepay-command-production.up.railway.app`, built from this repository's `Dockerfile`, **with** the demo assets, so the Interception page works), database on Neon (PostgreSQL, US East). `scripts/check_deploy.py` passes every required check against it.
 **What has been verified:** the API image runs against PostgreSQL (health, roles, accounts, reports, screening, simulation, name redaction without PyTorch, non-root user, about 160 MB of memory at start and about 260 MB after one simulation and one interception); the console builds and its 21 browser tests pass against a local API; CORS is allowed for the console's address.
 **What has not been verified:** how Railway's trial credit ($5, 30 days, then $1 a month) holds up under real use; there are no backups, alerts or log shipping.
 
@@ -20,18 +20,18 @@
 
 ## Before anything is public
 1. **Rotate** the Ollama and Gemini keys that were pasted into a chat during development.
-2. **Data licences** are written up in [DATA_LICENCES.md](DATA_LICENCES.md). The image downloads the OFAC list at build time. The optional demo assets (below) contain a 3,000-row sample of real ULB transactions and a model trained on that data: ULB's stated licence allows reuse with attribution and asks that a substantial extract keep the same licence, so publish that image only with the notice and citation. **Elliptic is CC BY-NC-ND: never seed Elliptic-derived cases on a public instance.** Without the assets the image has no ULB data and the Interception page answers 503.
+2. **Data licences** are written up in [DATA_LICENCES.md](DATA_LICENCES.md). The image downloads the OFAC list at build time. The optional demo assets (below) contain a 3,000-row sample of real ULB transactions and a model trained on that data: ULB's stated licence allows reuse with attribution and asks that a substantial extract keep the same licence, so it ships with `deploy/DEMO_ASSETS_NOTICE.md`. **Elliptic is CC BY-NC-ND: never seed Elliptic-derived cases on a public instance.** Without the assets the image has no ULB data and the Interception page answers 503.
 3. Make a long random admin key: `SAFEPAY_TENANTS="demo:<long-random>:admin"`, and a long random `SAFEPAY_CAPABILITY_SECRET`, otherwise capability tokens do not survive a restart.
 4. Use the database provider's connection string with TLS: `DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require` (leave out `channel_binding=require`).
 
 ## Steps
-**0. Optional: include the Interception page.** On your machine, with the data and trained model present: `bash scripts/prepare_demo_assets.sh`, then `docker build -t safepay-api .`. Keep that image private (see above).
+**0. The Interception page.** `deploy/demo_assets/` is committed (a 3,000-row ULB extract, the LightGBM model and the `ml` code, 2 MB, with `NOTICE.md` for attribution and licence), so a Railway build from the repository includes it. To refresh it on a machine that has the data and trained models: `bash scripts/prepare_demo_assets.sh`, then `git add -f deploy/demo_assets`.
 
 **1. Database.** Create a Neon project and copy the pooled connection string. Tables are created on first start.
 
 **2. API (Railway).** New project, Deploy from GitHub repo. Variables: `DATABASE_URL`, `SAFEPAY_TENANTS`, `SAFEPAY_CAPABILITY_SECRET`, `SAFEPAY_SIGNUP_TENANT`, `SAFEPAY_CORS_ORIGINS` (the console's address), optionally `OLLAMA_API_KEY`. Settings, Networking, Generate Domain.
 
-**3. Cases.** Only for a private instance: `python scripts/seed_cases.py --url https://<api> --key <admin key>` turns Elliptic alerts into cases, which the Elliptic licence (no derivatives, non-commercial) does not allow on a public site. The public demo therefore has no seeded cases.
+**3. Cases.** Only for a private instance: `python scripts/seed_cases.py --url https://<api> --key <admin key>` turns Elliptic alerts into cases, which the Elliptic licence (no derivatives, non-commercial) does not allow on a public site. For a public demo use `python scripts/seed_simulated_cases.py --url https://<api> --key <admin key>`: 16 cases labelled simulated (rings, pairs, a look-alike legitimate cluster, weak singles) that describe nothing real.
 
 **4. Console (Vercel).** Import the GitHub repository, root directory `console`. Set `NEXT_PUBLIC_API_URL` only if the API address differs from the default in `console/lib/api.ts`.
 

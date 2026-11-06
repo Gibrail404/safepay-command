@@ -1,6 +1,6 @@
 """A small sample of the REAL held-out ULB non-fraud transactions (3,000 rows: 1,500 with amounts 20 to 400, 1,500 with amounts 400 to 3,000) used by the interception demo when the full
-dataset is not available, for example inside the deployed container. Writes data/processed/scenario_pool.parquet. The licence terms of the ULB data are not confirmed: do not publish this file
-or an image that contains it until they are. Usage: python scripts/build_scenario_pool.py"""
+dataset is not available, for example inside the deployed container. Writes data/processed/scenario_pool.parquet. The ULB data is under the Open Database and Database Contents licences, so this extract may be
+published only with the notice in deploy/demo_assets/NOTICE.md (attribution, same licence). Usage: python scripts/build_scenario_pool.py"""
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]

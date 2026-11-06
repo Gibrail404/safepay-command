@@ -1,0 +1,129 @@
+{
+  "alert_threshold_logit": -6.644661291913591,
+  "alert_threshold_probability": 0.0017226463803291484,
+  "bands": {
+    "elevated": 0.0017226463803291484,
+    "high": 0.015528301123992045
+  },
+  "calibrator": {
+    "method": "platt",
+    "params": {
+      "a": 0.9458346553053245,
+      "b": -0.07741852286448257
+    }
+  },
+  "data": {
+    "fraud": {
+      "test": 75,
+      "train": 360,
+      "val": 57
+    },
+    "parquet_sha256": "a4512e48ca4d29cdb5f47d4ca4aef9d9bae24927e2b7a220e9d63e821d1f1ebc",
+    "rows": {
+      "test": 56962,
+      "train": 170884,
+      "val": 56961
+    },
+    "source": "ULB credit card fraud (real, anonymised)",
+    "split_fractions": [
+      0.6,
+      0.2,
+      0.2
+    ]
+  },
+  "features": [
+    "V1",
+    "V2",
+    "V3",
+    "V4",
+    "V5",
+    "V6",
+    "V7",
+    "V8",
+    "V9",
+    "V10",
+    "V11",
+    "V12",
+    "V13",
+    "V14",
+    "V15",
+    "V16",
+    "V17",
+    "V18",
+    "V19",
+    "V20",
+    "V21",
+    "V22",
+    "V23",
+    "V24",
+    "V25",
+    "V26",
+    "V27",
+    "V28",
+    "log_amount"
+  ],
+  "hyperparameters": {
+    "lightgbm": {
+      "colsample_bytree": 0.8,
+      "deterministic": true,
+      "force_row_wise": true,
+      "learning_rate": 0.03,
+      "min_child_samples": 20,
+      "n_estimators": 2000,
+      "n_jobs": 4,
+      "num_leaves": 31,
+      "random_state": 0,
+      "reg_lambda": 1.0,
+      "subsample": 0.8,
+      "subsample_freq": 1,
+      "verbose": -1
+    },
+    "mlp": {
+      "batch_size": 1024,
+      "epochs": 40,
+      "lr": 0.001,
+      "patience": 5,
+      "pos_weight": "sqrt(neg/pos)",
+      "weight_decay": 0.0001
+    },
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "libraries": {
+    "lightgbm": "4.7.0",
+    "numpy": "2.5.4",
+    "python": "3.14.7",
+    "scikit-learn": "1.9.1",
+    "torch": "2.15.0"
+  },
+  "limitations": [
+    "Features V1-V28 are anonymised PCA components; no customer ids, payee, device or time-of-day clock.",
+    "Only 75 fraud rows in the test period: intervals are wide.",
+    "Trained on European card transactions from two days in 2013; not representative of any other portfolio.",
+    "A score is a probability of fraud among card transactions, not of a scam."
+  ],
+  "model_type": "lightgbm",
+  "name": "risk",
+  "selection_rule": "best validation average precision; Platt calibration on validation; threshold = 1% validation FPR",
+  "test_summary": {
+    "lightgbm": {
+      "average_precision": 0.8119722482962047,
+      "recall_at_1pct_fpr": 0.88
+    },
+    "logreg": {
+      "average_precision": 0.683798275016638,
+      "recall_at_1pct_fpr": 0.8533333333333334
+    },
+    "mlp": {
+      "average_precision": 0.817886471141565,
+      "recall_at_1pct_fpr": 0.8666666666666667
+    }
+  },
+  "trained_at": "2026-11-04T13:55:50+00:00",
+  "version": "e18bf1ed46d0"
+}

@@ -1,0 +1,47 @@
+{
+  "alert_threshold_probability": 0.34900489857789874,
+  "bands": {
+    "elevated": 0.34900489857789874
+  },
+  "calibrator": {
+    "method": "platt",
+    "params": {
+      "a": 2.407871984076277,
+      "b": 2.6414484014994923
+    }
+  },
+  "chosen_C": 3.0,
+  "data": {
+    "after_dedup": 5159,
+    "label_conflicts_among_duplicates": 0,
+    "parquet_sha256": "a9c87c1692c37eac95ca7d3c3f5762c8d9e7bb1cb640d22c407bc05b01501f99",
+    "raw_rows": 5574,
+    "removed_duplicates": 415,
+    "rows": {
+      "test": 1032,
+      "train": 3095,
+      "val": 1032
+    },
+    "source": "UCI SMS Spam Collection (CC BY 4.0)",
+    "spam": {
+      "test": 128,
+      "train": 385,
+      "val": 129
+    }
+  },
+  "libraries": {
+    "numpy": "2.5.4",
+    "python": "3.14.7",
+    "scikit-learn": "1.9.1"
+  },
+  "limitations": [
+    "General SMS spam (promotions, prizes, premium-rate lines), not payment scams specifically.",
+    "Short, mostly English SMS; not tested on other channels or languages.",
+    "Stratified random split (no timestamps in the data), so a drift test is not possible."
+  ],
+  "model_type": "tfidf_logreg",
+  "name": "text_scam",
+  "selection_rule": "C chosen by validation average precision; Platt on validation; threshold = 1% validation FPR",
+  "trained_at": "2026-11-04T13:58:28+00:00",
+  "version": "8eebdbf077f5"
+}

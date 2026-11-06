@@ -8,5 +8,8 @@ rm -rf deploy/demo_assets && mkdir -p deploy/demo_assets && touch deploy/demo_as
 cp -R models deploy/demo_assets/models
 cp data/processed/scenario_pool.parquet deploy/demo_assets/scenario_pool.parquet
 cp -R ml deploy/demo_assets/ml
+cp deploy/DEMO_ASSETS_NOTICE.md deploy/demo_assets/NOTICE.md      # the attribution and licence notice travels with the data
 find deploy/demo_assets -name __pycache__ -prune -exec rm -rf {} +
+# Serving needs only the active LightGBM model and its metadata. Training by-products (neural-net weights, per-row validation and test scores) stay on your machine.
+find deploy/demo_assets/models/risk -mindepth 2 -type f ! -name lightgbm.txt ! -name metadata.json -delete
 echo "demo assets ready in deploy/demo_assets (model, scenario sample, ml package). Now: docker build -t safepay-api ."
