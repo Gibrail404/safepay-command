@@ -20,7 +20,7 @@
 
 ## Before anything is public
 1. **Rotate** the Ollama and Gemini keys that were pasted into a chat during development.
-2. **Decide the data question.** OFAC, ULB and Elliptic licence terms are unconfirmed. The image downloads the OFAC list at build time. The optional demo assets (below) contain a 3,000-row sample of real ULB transactions and a model trained on that data: keep an image with those assets private until the terms are settled. Without the assets the image has no ULB data and the Interception page answers 503.
+2. **Data licences** are written up in [DATA_LICENCES.md](DATA_LICENCES.md). The image downloads the OFAC list at build time. The optional demo assets (below) contain a 3,000-row sample of real ULB transactions and a model trained on that data: ULB's stated licence allows reuse with attribution and asks that a substantial extract keep the same licence, so publish that image only with the notice and citation. **Elliptic is CC BY-NC-ND: never seed Elliptic-derived cases on a public instance.** Without the assets the image has no ULB data and the Interception page answers 503.
 3. Make a long random admin key: `SAFEPAY_TENANTS="demo:<long-random>:admin"`, and a long random `SAFEPAY_CAPABILITY_SECRET`, otherwise capability tokens do not survive a restart.
 4. Use the database provider's connection string with TLS: `DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require` (leave out `channel_binding=require`).
 
@@ -31,7 +31,7 @@
 
 **2. API (Railway).** New project, Deploy from GitHub repo. Variables: `DATABASE_URL`, `SAFEPAY_TENANTS`, `SAFEPAY_CAPABILITY_SECRET`, `SAFEPAY_SIGNUP_TENANT`, `SAFEPAY_CORS_ORIGINS` (the console's address), optionally `OLLAMA_API_KEY`. Settings, Networking, Generate Domain.
 
-**3. Cases.** Import the real cases with the admin key: `python scripts/seed_cases.py --url https://<api> --key <admin key>` (needs the Elliptic data and a trained model locally).
+**3. Cases.** Only for a private instance: `python scripts/seed_cases.py --url https://<api> --key <admin key>` turns Elliptic alerts into cases, which the Elliptic licence (no derivatives, non-commercial) does not allow on a public site. The public demo therefore has no seeded cases.
 
 **4. Console (Vercel).** Import the GitHub repository, root directory `console`. Set `NEXT_PUBLIC_API_URL` only if the API address differs from the default in `console/lib/api.ts`.
 

@@ -1,0 +1,21 @@
+# Dataset licences: what was checked, what it means for this repository
+
+Checked on 2026-11-07 by reading the publishers' own pages where they could be reached. This is a working note, not legal advice. "Not found" means I looked and the official page did not say; it does not mean "allowed".
+
+| Dataset | Where I read it | Licence as stated there | What follows for this project |
+|---|---|---|---|
+| ULB credit card fraud (284,807 transactions) | The dataset's Kaggle page, License field | **"Database: Open Database, Contents: Database Contents"**, linking to the Open Data Commons DbCL 1.0. The page asks users to cite the authors' papers (list on the page). | Reuse with attribution is allowed. The database part is under the Open Database Licence, which also asks that a database derived from a substantial extract be shared under the same licence with a notice. The 3,000-row scenario sample in the optional demo assets is such an extract: if it is ever published, say it comes from the ULB data, give the citation and put it under the same licence. The repository itself holds no ULB rows. |
+| Elliptic Data Set (Bitcoin transaction graph) | The dataset's Kaggle page, License field | **CC BY-NC-ND 4.0**: attribution, non-commercial, no derivatives. | The strictest of the three. This project uses it for study and a portfolio, which is non-commercial, with attribution (Weber et al., 2019). It must **not** be redistributed in modified form: no features, scores, graph slices or Elliptic-derived cases on a public instance, and no commercial use. The repository holds none of it, and the hosted demo has no cases seeded from it. Aggregate numbers in `docs/reports/` and screenshots are a judgement call; they contain no node features, and the safest course is to keep them as plain results with the citation. The data in `registry.yaml` is fetched from a third-party mirror (PyG), not from Elliptic; the licence above is the publisher's, as shown on Kaggle. |
+| OFAC SDN and alternate-names lists | OFAC's Sanctions List Service pages and the Treasury "Site Policies and Notices" page | **No licence or terms-of-use text found** on either page. A federal catalogue record (secondary source, not OFAC) lists CC0. US federal government works are generally not under US copyright, but I have not seen OFAC state it for these files. | Downloaded at build time, not stored in the repository. `config/name_gazetteer.txt` holds about 105,000 individual words taken from the list's person names and from Census name files; it contains no records, entity ids or lists of sanctioned parties. The list changes, so the date of every download is recorded. Using it to test screening is the intended use; it is not a legal screening service. |
+| US Census name files | The Census open-data page and the data directory | **No licence text found.** The Bureau says it shares public data as open data. US federal work, same caveat as above. | Used for the name list and for non-sanctioned name tests. Cite the Census Bureau. |
+| SMS Spam Collection (UCI) | The UCI page (earlier check, in `registry.yaml`) | CC BY 4.0 | Attribution required (Almeida and Hidalgo, 2011). |
+
+## Rules this repository follows
+1. No raw data, no Elliptic features, no ULB rows are committed. Only scripts and results.
+2. Anything built from Elliptic stays on the owner's machine. Do not run `scripts/seed_cases.py` against a public instance.
+3. Images with the ULB sample or the model trained on it are shared only with the attribution and licence notice above.
+4. Cite the authors wherever results are quoted.
+
+## Still open
+- A lawyer has not looked at this. For anything beyond a personal portfolio (a company, a product, a paid service), get the Elliptic terms confirmed with Elliptic and ask counsel about the ULB share-alike clause.
+- OFAC and Census give no explicit reuse statement on the pages I read; the public-domain reading is the usual one for US federal works, not something they confirmed to me.

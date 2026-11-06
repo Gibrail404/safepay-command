@@ -85,7 +85,7 @@ python scripts/eval_llm.py && python scripts/eval_sandbox.py          # need OLL
 | US Census names (official) | 162,254 surnames, 5,494 first names | non-sanctioned names for screening false-alert rates |
 | Elliptic Bitcoin graph (real) | 203,769 nodes, 234,355 edges | graph, cases and the flywheel |
 
-The licence terms of the OFAC, ULB and Elliptic data are not confirmed; the repository contains no raw data, only scripts that download it. Citations: Dal Pozzolo, Caelen, Johnson, Bontempi (IEEE CIDM 2015) for ULB; Almeida and Hidalgo (2011), doi:10.24432/C5CC84 for SMS Spam; Weber et al. (2019) for Elliptic.
+Licences were read from the publishers' pages on 2026-11-07 ([docs/DATA_LICENCES.md](docs/DATA_LICENCES.md)): ULB is under the Open Database / Database Contents licences, Elliptic is **CC BY-NC-ND 4.0** (so it stays local and out of any public instance), and OFAC and Census state no terms on the pages I could read. The repository contains no raw data, only scripts that download it. Citations: Dal Pozzolo, Caelen, Johnson, Bontempi (IEEE CIDM 2015) for ULB; Almeida and Hidalgo (2011), doi:10.24432/C5CC84 for SMS Spam; Weber et al. (2019) for Elliptic.
 
 ## Known gaps
 

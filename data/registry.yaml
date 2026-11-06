@@ -8,7 +8,7 @@ datasets:
     format: arff
     md5: "178bcf9bb1f31a3dfe12d0e577884add"   # from the OpenML API, data id 1597
     expected: { rows: 284807, positives: 492 }
-    licence_note: "OpenML licence field says 'Public'; no formal licence text found. Cite the authors; do not redistribute the raw file."
+    licence_note: "Kaggle lists 'Database: Open Database, Contents: Database Contents' (DbCL 1.0), read 2026-11-07. Cite the authors; a substantial extract must carry the same licence and a notice. See docs/DATA_LICENCES.md."
     citation: "Dal Pozzolo, Caelen, Johnson, Bontempi. Calibrating Probability with Undersampling for Unbalanced Classification. IEEE CIDM 2015."
     caveat: "Features V1-V28 are anonymised PCA components; no customer ids, so no per-customer history."
   sms_spam:
@@ -25,7 +25,7 @@ datasets:
     role: "real payee / name screening (v1 or v2)"
     url: "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV"
     format: csv
-    licence_note: "Official US Treasury publication. Public-domain status NOT confirmed: read OFAC's terms before publishing derived data."
+    licence_note: "Official US Treasury publication. No terms of use found on OFAC or Treasury policy pages (checked 2026-11-07). See docs/DATA_LICENCES.md."
     caveat: "Changes over time: store the download date and hash with every use."
   ofac_alt:
     title: "OFAC SDN alternate names (aliases, a.k.a., f.k.a., n.k.a.)"
@@ -61,7 +61,7 @@ datasets:
     url: "https://data.pyg.org/datasets/elliptic/elliptic_txs_features.csv.zip"
     format: zip
     expected: { rows: 203769, columns: 167 }
-    licence_note: "Original licence text NOT found. A Hugging Face mirror claims MIT but that is not authoritative. Use locally only; do not redistribute; settle terms before any public demo."
+    licence_note: "CC BY-NC-ND 4.0 per the publisher's Kaggle page, read 2026-11-07: non-commercial, no derivatives. Use locally only; never put Elliptic-derived data on a public instance. See docs/DATA_LICENCES.md."
     caveat: "Crypto, not card payments. Used only to test graph-based grouping."
   elliptic_edges:
     title: "Elliptic Data Set: transaction edges"

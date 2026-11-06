@@ -1,7 +1,7 @@
 """Turn the REAL Elliptic alerts (test period, own-features model) into investigation cases and post them to a running API.
 Alerts that are directly linked form one case. The dataset's own labels are sent as hidden `truth`, revealed to the analyst only after a disposition.
 Usage: python scripts/seed_cases.py --url http://127.0.0.1:8000 --key demo-key [--max 150] [--out cases.json]"""
-import argparse, json, sys
+import argparse, json, re, sys
 from pathlib import Path
 import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +53,10 @@ def build_cases(max_cases: int, seed: int) -> list[dict]:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--url"), ap.add_argument("--key"), ap.add_argument("--max", type=int, default=150), ap.add_argument("--seed", type=int, default=7), ap.add_argument("--out")
+    ap.add_argument("--allow-public", action="store_true", help="post to a server that is not on this machine (the Elliptic licence, CC BY-NC-ND, does not allow derived data on a public site)")
     a = ap.parse_args()
+    if a.url and not a.allow_public and not re.match(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)", a.url):
+        sys.exit("refusing to post Elliptic-derived cases to a server that is not on this machine: the data is CC BY-NC-ND (see docs/DATA_LICENCES.md). Add --allow-public only for a private instance.")
     cases = build_cases(a.max, a.seed)
     print(len(cases), "cases;", sum(len(c["items"]) for c in cases), "alerts;", sum(len(c["items"]) > 1 for c in cases), "multi-alert cases")
     if a.out:
